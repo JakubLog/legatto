@@ -74,3 +74,11 @@ frontendu → `doctor.mjs`.
 - `.mcp.json` - w URL serwera Supabase MCP zamień `project_ref=<project-ref>` na ref projektu Supabase danej instancji,
 - seed `app_settings.district` = okręg 35 (spójny ze słownikami),
 - słowniki powiatów i gmin okręgu 35 (podmień skryptem z punktu 4).
+
+## Licencja
+
+Copyright (C) 2026 Jakub M. Fedoszczak
+
+Program jest udostępniony na licencji GNU Affero General Public License v3.0 (`AGPL-3.0-only`) - pełny tekst
+w pliku [`LICENSE`](LICENSE). Kto udostępnia zmodyfikowaną wersję użytkownikom przez sieć, musi udostępnić im
+jej kod źródłowy (sekcja 13 licencji).
