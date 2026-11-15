@@ -1,0 +1,14 @@
+{
+  "number": 15,
+  "seat": "Tarnów",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "1263" },
+    { "teryt": "1201" },
+    { "teryt": "1202" },
+    { "teryt": "1204" },
+    { "teryt": "1214" },
+    { "teryt": "1216" },
+    { "teryt": "1219" }
+  ]
+}

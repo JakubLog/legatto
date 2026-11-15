@@ -1,0 +1,14 @@
+{
+  "number": 30,
+  "seat": "Bielsko-Biała",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "2467" },
+    { "teryt": "2473" },
+    { "teryt": "2479" },
+    { "teryt": "2408" },
+    { "teryt": "2411" },
+    { "teryt": "2412" },
+    { "teryt": "2415" }
+  ]
+}

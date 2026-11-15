@@ -1,0 +1,18 @@
+{
+  "number": 6,
+  "seat": "Lublin",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "0663" },
+    { "teryt": "0605" },
+    { "teryt": "0607" },
+    { "teryt": "0608" },
+    { "teryt": "0609" },
+    { "teryt": "0610" },
+    { "teryt": "0611" },
+    { "teryt": "0612" },
+    { "teryt": "0614" },
+    { "teryt": "0616" },
+    { "teryt": "0617" }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "number": 26,
+  "seat": "Słupsk",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "2262" },
+    { "teryt": "2263" },
+    { "teryt": "2201" },
+    { "teryt": "2202" },
+    { "teryt": "2203" },
+    { "teryt": "2205" },
+    { "teryt": "2206" },
+    { "teryt": "2208" },
+    { "teryt": "2211" },
+    { "teryt": "2212" },
+    { "teryt": "2215" }
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "number": 35,
+  "seat": "Olsztyn",
+  "source": "Kodeks wyborczy, zał. nr 1 (okręg nr 35, siedziba OKW: Olsztyn); kolejność id = seed migracji 20260425100000_init_contacts_powiaty_gminy.sql",
+  "highlight": { "powiat_id": 1, "gmina_id": 1, "label": "Olsztyn" },
+  "powiaty": [
+    { "id": 1, "teryt": "2862", "name": "m. Olsztyn", "is_city": true, "lat": 53.7784, "lng": 20.4801 },
+    { "id": 2, "teryt": "2814", "name": "olsztyński", "is_city": false, "lat": 53.85, "lng": 20.5 },
+    { "id": 3, "teryt": "2805", "name": "ełcki", "is_city": false, "lat": 53.8266, "lng": 22.3636 },
+    { "id": 4, "teryt": "2806", "name": "giżycki", "is_city": false, "lat": 54.0436, "lng": 21.7691 },
+    { "id": 5, "teryt": "2818", "name": "gołdapski", "is_city": false, "lat": 54.3084, "lng": 22.3068 },
+    { "id": 6, "teryt": "2808", "name": "kętrzyński", "is_city": false, "lat": 54.0762, "lng": 21.3737 },
+    { "id": 7, "teryt": "2810", "name": "mrągowski", "is_city": false, "lat": 53.8703, "lng": 21.3047 },
+    { "id": 8, "teryt": "2811", "name": "nidzicki", "is_city": false, "lat": 53.3578, "lng": 20.4274 },
+    { "id": 9, "teryt": "2813", "name": "olecki", "is_city": false, "lat": 54.0357, "lng": 22.5048 },
+    { "id": 10, "teryt": "2816", "name": "piski", "is_city": false, "lat": 53.6308, "lng": 21.8086 },
+    { "id": 11, "teryt": "2817", "name": "szczycieński", "is_city": false, "lat": 53.5635, "lng": 20.9863 },
+    { "id": 12, "teryt": "2819", "name": "węgorzewski", "is_city": false, "lat": 54.2127, "lng": 21.7409 }
+  ],
+  "gminy": [
+    { "id": 1, "powiat_id": 1, "raw": "Olsztyn", "type": "m", "display": "Olsztyn" },
+
+    { "id": 2, "powiat_id": 2, "raw": "Barczewo", "type": "mw", "display": "Barczewo" },
+    { "id": 3, "powiat_id": 2, "raw": "Biskupiec", "type": "mw", "display": "Biskupiec" },
+    { "id": 4, "powiat_id": 2, "raw": "Dobre Miasto", "type": "mw", "display": "Dobre Miasto" },
+    { "id": 5, "powiat_id": 2, "raw": "Dywity", "type": "w", "display": "Dywity" },
+    { "id": 6, "powiat_id": 2, "raw": "Gietrzwałd", "type": "w", "display": "Gietrzwałd" },
+    { "id": 7, "powiat_id": 2, "raw": "Jeziorany", "type": "mw", "display": "Jeziorany" },
+    { "id": 8, "powiat_id": 2, "raw": "Jonkowo", "type": "w", "display": "Jonkowo" },
+    { "id": 9, "powiat_id": 2, "raw": "Kolno", "type": "w", "display": "Kolno" },
+    { "id": 10, "powiat_id": 2, "raw": "Olsztynek", "type": "mw", "display": "Olsztynek" },
+    { "id": 11, "powiat_id": 2, "raw": "Purda", "type": "w", "display": "Purda" },
+    { "id": 12, "powiat_id": 2, "raw": "Stawiguda", "type": "w", "display": "Stawiguda" },
+    { "id": 13, "powiat_id": 2, "raw": "Świątki", "type": "w", "display": "Świątki" },
+
+    { "id": 14, "powiat_id": 3, "raw": "Ełk", "type": "m", "display": "Ełk (miasto)" },
+    { "id": 15, "powiat_id": 3, "raw": "Ełk", "type": "w", "display": "Ełk (gmina)" },
+    { "id": 16, "powiat_id": 3, "raw": "Kalinowo", "type": "w", "display": "Kalinowo" },
+    { "id": 17, "powiat_id": 3, "raw": "Prostki", "type": "w", "display": "Prostki" },
+    { "id": 18, "powiat_id": 3, "raw": "Stare Juchy", "type": "w", "display": "Stare Juchy" },
+
+    { "id": 19, "powiat_id": 4, "raw": "Giżycko", "type": "m", "display": "Giżycko (miasto)" },
+    { "id": 20, "powiat_id": 4, "raw": "Giżycko", "type": "w", "display": "Giżycko (gmina)" },
+    { "id": 21, "powiat_id": 4, "raw": "Kruklanki", "type": "w", "display": "Kruklanki" },
+    { "id": 22, "powiat_id": 4, "raw": "Miłki", "type": "w", "display": "Miłki" },
+    { "id": 23, "powiat_id": 4, "raw": "Ryn", "type": "mw", "display": "Ryn" },
+    { "id": 24, "powiat_id": 4, "raw": "Wydminy", "type": "w", "display": "Wydminy" },
+
+    { "id": 25, "powiat_id": 5, "raw": "Banie Mazurskie", "type": "w", "display": "Banie Mazurskie" },
+    { "id": 26, "powiat_id": 5, "raw": "Dubeninki", "type": "w", "display": "Dubeninki" },
+    { "id": 27, "powiat_id": 5, "raw": "Gołdap", "type": "mw", "display": "Gołdap" },
+
+    { "id": 28, "powiat_id": 6, "raw": "Kętrzyn", "type": "m", "display": "Kętrzyn (miasto)" },
+    { "id": 29, "powiat_id": 6, "raw": "Kętrzyn", "type": "w", "display": "Kętrzyn (gmina)" },
+    { "id": 30, "powiat_id": 6, "raw": "Korsze", "type": "mw", "display": "Korsze" },
+    { "id": 31, "powiat_id": 6, "raw": "Reszel", "type": "mw", "display": "Reszel" },
+    { "id": 32, "powiat_id": 6, "raw": "Barciany", "type": "w", "display": "Barciany" },
+    { "id": 33, "powiat_id": 6, "raw": "Srokowo", "type": "w", "display": "Srokowo" },
+
+    { "id": 34, "powiat_id": 7, "raw": "Mrągowo", "type": "m", "display": "Mrągowo (miasto)" },
+    { "id": 35, "powiat_id": 7, "raw": "Mrągowo", "type": "w", "display": "Mrągowo (gmina)" },
+    { "id": 36, "powiat_id": 7, "raw": "Mikołajki", "type": "mw", "display": "Mikołajki" },
+    { "id": 37, "powiat_id": 7, "raw": "Piecki", "type": "w", "display": "Piecki" },
+    { "id": 38, "powiat_id": 7, "raw": "Sorkwity", "type": "w", "display": "Sorkwity" },
+
+    { "id": 39, "powiat_id": 8, "raw": "Nidzica", "type": "mw", "display": "Nidzica" },
+    { "id": 40, "powiat_id": 8, "raw": "Janowiec Kościelny", "type": "w", "display": "Janowiec Kościelny" },
+    { "id": 41, "powiat_id": 8, "raw": "Janowo", "type": "w", "display": "Janowo" },
+    { "id": 42, "powiat_id": 8, "raw": "Kozłowo", "type": "w", "display": "Kozłowo" },
+
+    { "id": 43, "powiat_id": 9, "raw": "Olecko", "type": "mw", "display": "Olecko" },
+    { "id": 44, "powiat_id": 9, "raw": "Kowale Oleckie", "type": "w", "display": "Kowale Oleckie" },
+    { "id": 45, "powiat_id": 9, "raw": "Świętajno", "type": "w", "display": "Świętajno (olecki)", "db_name": "Świętajno" },
+    { "id": 46, "powiat_id": 9, "raw": "Wieliczki", "type": "w", "display": "Wieliczki" },
+
+    { "id": 47, "powiat_id": 10, "raw": "Pisz", "type": "mw", "display": "Pisz" },
+    { "id": 48, "powiat_id": 10, "raw": "Biała Piska", "type": "mw", "display": "Biała Piska" },
+    { "id": 49, "powiat_id": 10, "raw": "Orzysz", "type": "mw", "display": "Orzysz" },
+    { "id": 50, "powiat_id": 10, "raw": "Ruciane-Nida", "type": "mw", "display": "Ruciane-Nida" },
+
+    { "id": 51, "powiat_id": 11, "raw": "Szczytno", "type": "m", "display": "Szczytno (miasto)" },
+    { "id": 52, "powiat_id": 11, "raw": "Szczytno", "type": "w", "display": "Szczytno (gmina)" },
+    { "id": 53, "powiat_id": 11, "raw": "Pasym", "type": "mw", "display": "Pasym" },
+    { "id": 54, "powiat_id": 11, "raw": "Dźwierzuty", "type": "w", "display": "Dźwierzuty" },
+    { "id": 55, "powiat_id": 11, "raw": "Jedwabno", "type": "w", "display": "Jedwabno" },
+    { "id": 56, "powiat_id": 11, "raw": "Rozogi", "type": "w", "display": "Rozogi" },
+    { "id": 57, "powiat_id": 11, "raw": "Świętajno", "type": "w", "display": "Świętajno (szczycieński)", "db_name": "Świętajno" },
+    { "id": 58, "powiat_id": 11, "raw": "Wielbark", "type": "w", "display": "Wielbark" },
+
+    { "id": 59, "powiat_id": 12, "raw": "Węgorzewo", "type": "mw", "display": "Węgorzewo" },
+    { "id": 60, "powiat_id": 12, "raw": "Budry", "type": "w", "display": "Budry" },
+    { "id": 61, "powiat_id": 12, "raw": "Pozezdrze", "type": "w", "display": "Pozezdrze" }
+  ]
+}

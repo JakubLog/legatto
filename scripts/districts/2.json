@@ -1,0 +1,13 @@
+{
+  "number": 2,
+  "seat": "Wałbrzych",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "0265" },
+    { "teryt": "0202" },
+    { "teryt": "0208" },
+    { "teryt": "0219" },
+    { "teryt": "0221" },
+    { "teryt": "0224" }
+  ]
+}

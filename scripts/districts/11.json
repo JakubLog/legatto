@@ -1,0 +1,19 @@
+{
+  "number": 11,
+  "seat": "Sieradz",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "1002" },
+    { "teryt": "1003" },
+    { "teryt": "1004" },
+    { "teryt": "1005" },
+    { "teryt": "1008" },
+    { "teryt": "1009" },
+    { "teryt": "1011" },
+    { "teryt": "1014" },
+    { "teryt": "1017" },
+    { "teryt": "1018" },
+    { "teryt": "1019" },
+    { "teryt": "1020" }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "number": 1,
+  "seat": "Legnica",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "0261" },
+    { "teryt": "0262" },
+    { "teryt": "0201" },
+    { "teryt": "0203" },
+    { "teryt": "0205" },
+    { "teryt": "0206" },
+    { "teryt": "0207" },
+    { "teryt": "0209" },
+    { "teryt": "0210" },
+    { "teryt": "0211" },
+    { "teryt": "0212" },
+    { "teryt": "0216" },
+    { "teryt": "0225" },
+    { "teryt": "0226" }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "pnpm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "regions": ["dub1"],
+  "functions": {
+    "api/mcp.ts": { "maxDuration": 30 },
+    "api/poliai.ts": { "maxDuration": 300 },
+    "api/integracje.ts": { "maxDuration": 300 },
+    "api/oauth/authorize.ts": { "maxDuration": 10 },
+    "api/oauth/token.ts": { "maxDuration": 15 },
+    "api/oauth/code.ts": { "maxDuration": 15 },
+    "api/oauth/discovery.ts": { "maxDuration": 5 },
+    "api/cron/*.ts": { "maxDuration": 120 },
+    "api/sejm-sittings.ts": { "maxDuration": 15 },
+    "api/newsletter-view.ts": { "maxDuration": 10 },
+    "api/notifications.ts": { "maxDuration": 60 }
+  },
+  "crons": [
+    { "path": "/api/cron/sync-ics", "schedule": "0 4 * * *" },
+    { "path": "/api/cron/poliai-purge", "schedule": "30 3 * * *" },
+    { "path": "/api/cron/notifications", "schedule": "0 5 * * *" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Strict-Transport-Security", "value": "max-age=63072000" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(), interest-cohort=()" },
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+        { "key": "Cross-Origin-Resource-Policy", "value": "same-origin" }
+      ]
+    },
+    {
+      "source": "/((?!n/|api/newsletter-view).*)",
+      "headers": [
+        { "key": "Content-Security-Policy", "value": "script-src 'self' https://challenges.cloudflare.com; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; worker-src 'self'; manifest-src 'self'" }
+      ]
+    },
+    {
+      "source": "/(n/.*|api/newsletter-view)",
+      "headers": [
+        { "key": "Content-Security-Policy", "value": "sandbox; default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https: data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/.well-known/oauth-authorization-server",
+      "destination": "/api/oauth/discovery"
+    },
+    {
+      "source": "/favicon.ico",
+      "destination": "/favicon.svg"
+    },
+    { "source": "/n/:slug", "destination": "/api/newsletter-view?slug=:slug" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
+}

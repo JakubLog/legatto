@@ -1,0 +1,16 @@
+{
+  "number": 31,
+  "seat": "Katowice",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "2463" },
+    { "teryt": "2469" },
+    { "teryt": "2470" },
+    { "teryt": "2471" },
+    { "teryt": "2472" },
+    { "teryt": "2474" },
+    { "teryt": "2476" },
+    { "teryt": "2477" },
+    { "teryt": "2414" }
+  ]
+}

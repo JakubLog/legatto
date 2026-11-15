@@ -1,0 +1,21 @@
+{
+  "number": 8,
+  "seat": "Zielona Góra",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "0861" },
+    { "teryt": "0862" },
+    { "teryt": "0801" },
+    { "teryt": "0802" },
+    { "teryt": "0803" },
+    { "teryt": "0804" },
+    { "teryt": "0805" },
+    { "teryt": "0806" },
+    { "teryt": "0807" },
+    { "teryt": "0808" },
+    { "teryt": "0809" },
+    { "teryt": "0810" },
+    { "teryt": "0811" },
+    { "teryt": "0812" }
+  ]
+}

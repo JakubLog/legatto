@@ -1,0 +1,16 @@
+{
+  "number": 4,
+  "seat": "Bydgoszcz",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "0461" },
+    { "teryt": "0403" },
+    { "teryt": "0407" },
+    { "teryt": "0409" },
+    { "teryt": "0410" },
+    { "teryt": "0413" },
+    { "teryt": "0414" },
+    { "teryt": "0416" },
+    { "teryt": "0419" }
+  ]
+}

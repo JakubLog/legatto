@@ -1,0 +1,18 @@
+{
+  "number": 16,
+  "seat": "Płock",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "1462" },
+    { "teryt": "1402" },
+    { "teryt": "1404" },
+    { "teryt": "1413" },
+    { "teryt": "1419" },
+    { "teryt": "1420" },
+    { "teryt": "1422" },
+    { "teryt": "1427" },
+    { "teryt": "1428" },
+    { "teryt": "1437" },
+    { "teryt": "1438" }
+  ]
+}

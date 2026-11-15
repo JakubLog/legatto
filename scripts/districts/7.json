@@ -1,0 +1,20 @@
+{
+  "number": 7,
+  "seat": "Chełm",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "0661" },
+    { "teryt": "0662" },
+    { "teryt": "0664" },
+    { "teryt": "0601" },
+    { "teryt": "0602" },
+    { "teryt": "0603" },
+    { "teryt": "0604" },
+    { "teryt": "0606" },
+    { "teryt": "0613" },
+    { "teryt": "0615" },
+    { "teryt": "0618" },
+    { "teryt": "0619" },
+    { "teryt": "0620" }
+  ]
+}

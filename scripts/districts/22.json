@@ -1,0 +1,19 @@
+{
+  "number": 22,
+  "seat": "Krosno",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "1861" },
+    { "teryt": "1862" },
+    { "teryt": "1801" },
+    { "teryt": "1802" },
+    { "teryt": "1804" },
+    { "teryt": "1805" },
+    { "teryt": "1807" },
+    { "teryt": "1821" },
+    { "teryt": "1809" },
+    { "teryt": "1813" },
+    { "teryt": "1814" },
+    { "teryt": "1817" }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "number": 12,
+  "seat": "Kraków",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "1203" },
+    { "teryt": "1209" },
+    { "teryt": "1213" },
+    { "teryt": "1215" },
+    { "teryt": "1218" }
+  ]
+}

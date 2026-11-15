@@ -1,0 +1,18 @@
+{
+  "number": 41,
+  "seat": "Szczecin",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "3262" },
+    { "teryt": "3263" },
+    { "teryt": "3204" },
+    { "teryt": "3205" },
+    { "teryt": "3206" },
+    { "teryt": "3207" },
+    { "teryt": "3218" },
+    { "teryt": "3210" },
+    { "teryt": "3211" },
+    { "teryt": "3212" },
+    { "teryt": "3214" }
+  ]
+}

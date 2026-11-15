@@ -1,0 +1,8 @@
+{
+  "number": 19,
+  "seat": "Warszawa",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "1465" }
+  ]
+}

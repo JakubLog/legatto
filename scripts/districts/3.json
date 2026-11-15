@@ -1,0 +1,17 @@
+{
+  "number": 3,
+  "seat": "Wrocław",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "0264" },
+    { "teryt": "0204" },
+    { "teryt": "0213" },
+    { "teryt": "0214" },
+    { "teryt": "0215" },
+    { "teryt": "0217" },
+    { "teryt": "0218" },
+    { "teryt": "0220" },
+    { "teryt": "0222" },
+    { "teryt": "0223" }
+  ]
+}

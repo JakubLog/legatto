@@ -1,0 +1,18 @@
+{
+  "number": 38,
+  "seat": "Piła",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "3001" },
+    { "teryt": "3002" },
+    { "teryt": "3005" },
+    { "teryt": "3014" },
+    { "teryt": "3015" },
+    { "teryt": "3016" },
+    { "teryt": "3019" },
+    { "teryt": "3024" },
+    { "teryt": "3028" },
+    { "teryt": "3029" },
+    { "teryt": "3031" }
+  ]
+}

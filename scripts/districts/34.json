@@ -1,0 +1,16 @@
+{
+  "number": 34,
+  "seat": "Elbląg",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "2861" },
+    { "teryt": "2801" },
+    { "teryt": "2802" },
+    { "teryt": "2803" },
+    { "teryt": "2804" },
+    { "teryt": "2807" },
+    { "teryt": "2809" },
+    { "teryt": "2812" },
+    { "teryt": "2815" }
+  ]
+}

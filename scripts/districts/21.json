@@ -1,0 +1,19 @@
+{
+  "number": 21,
+  "seat": "Opole",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "1661" },
+    { "teryt": "1601" },
+    { "teryt": "1602" },
+    { "teryt": "1603" },
+    { "teryt": "1604" },
+    { "teryt": "1605" },
+    { "teryt": "1606" },
+    { "teryt": "1607" },
+    { "teryt": "1608" },
+    { "teryt": "1609" },
+    { "teryt": "1610" },
+    { "teryt": "1611" }
+  ]
+}

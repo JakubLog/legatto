@@ -1,0 +1,21 @@
+{
+  "number": 33,
+  "seat": "Kielce",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "2661" },
+    { "teryt": "2601" },
+    { "teryt": "2602" },
+    { "teryt": "2603" },
+    { "teryt": "2604" },
+    { "teryt": "2605" },
+    { "teryt": "2606" },
+    { "teryt": "2607" },
+    { "teryt": "2608" },
+    { "teryt": "2609" },
+    { "teryt": "2610" },
+    { "teryt": "2611" },
+    { "teryt": "2612" },
+    { "teryt": "2613" }
+  ]
+}

@@ -1,0 +1,342 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /*
+   * Brand (portal biura - jasny, lekki interfejs w stylu ClickUp):
+   *   --primary: #1e3a8a (granat - kolor główny: akcje, aktywne elementy, linki)
+   *   --brand:   #E5114D (bordowy - akcent CTA, focus ring)
+   *
+   * Powierzchnie:
+   *   --background - jasnoszare, chłodne tło obszaru aplikacji (canvas)
+   *   --card / --popover - białe karty, dialogi i menu na tle canvasu
+   *   --sidebar-* - jasnoszary panel nawigacji (ciemny w trybie .dark)
+   *
+   * Kształty: --radius = 0.5rem (rounded-lg = 8px, rounded-xl = 12px dla dialogów i dużych paneli).
+   */
+  :root {
+    --background: 220 20% 97.5%;
+    --foreground: 222 20% 14%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 20% 14%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 20% 14%;
+
+    --primary: 224 64% 33%;
+    --primary-foreground: 0 0% 100%;
+    --primary-end: 224 64% 22%;
+
+    --brand: 343 87% 48%;
+    --brand-foreground: 0 0% 100%;
+    --brand-end: 343 87% 36%;
+
+    --secondary: 220 16% 94.5%;
+    --secondary-foreground: 222 20% 14%;
+
+    --muted: 220 15% 94%;
+    --muted-foreground: 220 9% 44%;
+
+    --accent: 220 16% 94%;
+    --accent-foreground: 222 20% 14%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 14% 90%;
+    --input: 220 13% 87%;
+    --ring: 343 87% 48%;
+
+    --sidebar: 220 18% 96%;
+    --sidebar-foreground: 222 16% 24%;
+    --sidebar-accent: 220 16% 90.5%;
+    --sidebar-border: 220 14% 89%;
+    --sidebar-muted: 220 9% 46%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222 14% 8%;
+    --foreground: 220 14% 95%;
+
+    --card: 222 13% 11.5%;
+    --card-foreground: 220 14% 95%;
+
+    --popover: 222 13% 13%;
+    --popover-foreground: 220 14% 95%;
+
+    --primary: 224 60% 62%;
+    --primary-foreground: 0 0% 100%;
+    --primary-end: 224 60% 48%;
+
+    --brand: 343 87% 56%;
+    --brand-foreground: 0 0% 100%;
+    --brand-end: 343 87% 44%;
+
+    --secondary: 222 11% 17%;
+    --secondary-foreground: 220 14% 95%;
+
+    --muted: 222 11% 16%;
+    --muted-foreground: 220 9% 64%;
+
+    --accent: 222 11% 19%;
+    --accent-foreground: 220 14% 95%;
+
+    --destructive: 0 65% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 222 10% 19%;
+    --input: 222 10% 23%;
+    --ring: 343 87% 56%;
+
+    --sidebar: 222 14% 10%;
+    --sidebar-foreground: 220 12% 84%;
+    --sidebar-accent: 222 11% 18%;
+    --sidebar-border: 222 10% 17%;
+    --sidebar-muted: 220 8% 58%;
+  }
+
+  /*
+   * Publiczna strona (/). Klasę `.theme-public`, atrybut `data-public-template` i zmienne
+   * motywu (paleta szablonu, kolor przewodni posła, `--radius`, `--public-*`) nakłada PublicLayout
+   * na <html> (portale Radix też je dziedziczą) i zdejmuje przy wyjściu, więc portal /biuro
+   * i /login zostają w motywie granatowym. Definicje 5 szablonów: src/lib/publicTheme.ts.
+   * Zmienne są stylem inline na <html>, więc wygrywają z `.dark` i `html.a11y-contrast`
+   * (wysoki kontrast strony publicznej liczy publicTheme.ts).
+   */
+  .theme-public,
+  .theme-public body {
+    font-family: var(--public-font-body);
+    font-feature-settings: normal;
+    line-height: 1.6;
+  }
+  .theme-public :is(h1, h2, h3) {
+    font-family: var(--public-font-heading);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .theme-public {
+      scroll-behavior: smooth;
+    }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html, body, #root {
+    @apply h-full;
+  }
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-tap-highlight-color: transparent;
+  }
+  ::selection {
+    @apply bg-primary/15 text-foreground;
+  }
+  .dark ::selection {
+    @apply bg-primary/35;
+  }
+
+  /* Subtelne paski przewijania (Firefox + WebKit) */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--foreground) / 0.18) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--foreground) / 0.16);
+    border: 3px solid transparent;
+    border-radius: 9999px;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--foreground) / 0.3);
+  }
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* iOS safe area */
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+@layer components {
+  /* Akcent szeryfowy (podpisy, cytaty) na stronie publicznej - Source Serif 4 italic. */
+  .serif {
+    font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+    font-style: italic;
+    font-weight: 400;
+  }
+}
+
+/* Szablony strony publicznej (src/lib/publicTheme.ts): kolory, fonty i zaokrąglenia są
+   zmiennymi; tu tylko charakter nagłówków, którego nie da się wyrazić jedną zmienną. */
+html.theme-public[data-public-template='elegancki'] :is(h1, h2) {
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+html.theme-public[data-public-template='wyrazisty'] :is(h1, h2) {
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+/* Obszar w kolorze przewodnim (hero szablonu "Wyrazisty"): role kolorów odwrócone, więc te
+   same klasy (bg-card, text-brand, przyciski publicBtn) dają tekst i przyciski w kolorze
+   tekstu na kolorze przewodnim. */
+.public-brand-surface {
+  --card: var(--public-brand);
+  --foreground: var(--public-brand-fg);
+  --muted-foreground: var(--public-brand-fg);
+  --border: var(--public-brand-fg);
+  --brand: var(--public-brand-fg);
+  --brand-foreground: var(--public-brand);
+  --brand-end: var(--public-brand-fg-end);
+}
+
+/* Puls Biura: impuls przesuwający się po linii EKG (PulseGauge). Ścieżka ma pathLength=1,
+   kreska 0.3 + przerwa 1 = okres 1.3, więc przesunięcie o 1.3 zapętla animację bez skoku. */
+@keyframes pulse-sweep {
+  from {
+    stroke-dashoffset: 0.3;
+  }
+  to {
+    stroke-dashoffset: -1;
+  }
+}
+
+/* PoliAI: fragmenty strumieniowanej odpowiedzi (słowa) wjeżdżają z fade-in przy pierwszym
+   zamontowaniu - React zachowuje już wyrenderowane spany (ten sam index w drzewie), więc
+   animuje się tylko nowo dopisany fragment tekstu. */
+@keyframes poliai-word-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.1em);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.poliai-fade {
+  display: inline-block;
+  animation: poliai-word-in 0.25s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .poliai-fade {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+ * Ustawienia dostępności (Mój profil → Ustawienia dostępności).
+ * Klasy / atrybut na <html> nakłada src/lib/accessibility.ts (przed pierwszym malowaniem:
+ * public/a11y-init.js). Ustawienia są per urządzenie (localStorage), bez zapisu w bazie.
+ * Blok utrzymywany razem z tymi plikami - trzymaj go na końcu pliku.
+ * ========================================================================== */
+
+/* Rozmiar tekstu: cały interfejs jest w rem (także arbitralne text-[13px] - postcss.config.js
+   zamienia px w font-size na rem), więc skaluje go rozmiar czcionki <html>. Procenty
+   zachowują bazowy rozmiar czcionki ustawiony w przeglądarce. */
+html[data-a11y-text='112'] {
+  font-size: 112.5%;
+}
+html[data-a11y-text='125'] {
+  font-size: 125%;
+}
+html[data-a11y-text='150'] {
+  font-size: 150%;
+}
+
+/* Wysoki kontrast: ciemniejszy tekst pomocniczy, wyraźne obramowania pól i separatorów.
+   `html.` podnosi specyficzność ponad :root. Strona publiczna ma własne wartości kontrastu
+   (src/lib/publicTheme.ts) w stylu inline na <html>, który wygrywa z tym blokiem. */
+html.a11y-contrast {
+  --foreground: 222 40% 7%;
+  --card-foreground: 222 40% 7%;
+  --popover-foreground: 222 40% 7%;
+  --secondary-foreground: 222 40% 7%;
+  --accent-foreground: 222 40% 7%;
+  --muted-foreground: 220 18% 24%;
+  --primary: 224 76% 24%;
+  --primary-end: 224 76% 16%;
+  --destructive: 0 75% 40%;
+  --border: 220 10% 55%;
+  --input: 220 12% 40%;
+  --sidebar-foreground: 222 40% 8%;
+  --sidebar-muted: 220 18% 26%;
+  --sidebar-border: 220 10% 55%;
+}
+html.a11y-contrast ::placeholder {
+  color: hsl(var(--muted-foreground));
+  opacity: 1;
+}
+
+/* Ograniczenie animacji: animacje i przejścia kończą się natychmiast (zdarzenia animationend
+   nadal przychodzą, więc dialogi Radix zamykają się poprawnie). Kręcący się wskaźnik
+   ładowania zostaje - informuje o stanie, a nie jest ruchem dekoracyjnym. */
+html.a11y-reduce-motion,
+html.a11y-reduce-motion * {
+  scroll-behavior: auto !important;
+}
+html.a11y-reduce-motion *,
+html.a11y-reduce-motion *::before,
+html.a11y-reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0s !important;
+}
+html.a11y-reduce-motion .animate-spin {
+  animation-duration: 1s !important;
+  animation-iteration-count: infinite !important;
+}
+
+/* Podkreślanie linków: linki w tekście (wyświetlane inline) i elementy w stylu linku
+   (hover:underline, Button variant="link"). Linki-kafelki, nawigacja i przyciski
+   (flex / grid / block) zostają bez podkreślenia. */
+html.a11y-underline-links a[href]:not(.flex, .inline-flex, .grid, .block, .inline-block),
+html.a11y-underline-links .hover\:underline {
+  text-decoration-line: underline !important;
+  text-decoration-thickness: max(1px, 0.07em);
+  text-underline-offset: 0.2em;
+}
+
+/* Wyraźny wskaźnik fokusu: gruby obrys przy nawigacji klawiaturą, także tam,
+   gdzie komponent ma focus-visible:outline-none. */
+html.a11y-focus :focus-visible {
+  outline: 3px solid hsl(var(--ring)) !important;
+  outline-offset: 2px !important;
+}
+
+/* Kolory dla daltonistów (`html.a11y-colorblind`): zmienne palet `--palette-emerald-*` /
+   `--palette-green-*` (zieleń → niebieski) generuje plugin w tailwind.config.ts - tu bez reguł. */
+
+/* Odstępy ułatwiające czytanie (WCAG 1.4.12, dysleksja): większe odstępy między literami,
+   słowami i wierszami tekstu ciągłego. */
+html.a11y-spacing body,
+html.a11y-spacing body * {
+  letter-spacing: 0.04em !important;
+  word-spacing: 0.12em !important;
+}
+html.a11y-spacing :is(p, li, dd, dt, td, th, blockquote, label, textarea) {
+  line-height: 1.65 !important;
+}

@@ -1,0 +1,13 @@
+{
+  "number": 14,
+  "seat": "Nowy Sącz",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "1262" },
+    { "teryt": "1205" },
+    { "teryt": "1207" },
+    { "teryt": "1210" },
+    { "teryt": "1211" },
+    { "teryt": "1217" }
+  ]
+}

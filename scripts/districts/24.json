@@ -1,0 +1,24 @@
+{
+  "number": 24,
+  "seat": "Białystok",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "2061" },
+    { "teryt": "2062" },
+    { "teryt": "2063" },
+    { "teryt": "2001" },
+    { "teryt": "2002" },
+    { "teryt": "2003" },
+    { "teryt": "2004" },
+    { "teryt": "2005" },
+    { "teryt": "2006" },
+    { "teryt": "2007" },
+    { "teryt": "2008" },
+    { "teryt": "2009" },
+    { "teryt": "2010" },
+    { "teryt": "2011" },
+    { "teryt": "2012" },
+    { "teryt": "2013" },
+    { "teryt": "2014" }
+  ]
+}

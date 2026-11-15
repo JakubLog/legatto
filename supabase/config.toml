@@ -1,0 +1,51 @@
+# Supabase project config
+project_id = "legatto-app"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[auth]
+enabled = true
+# Adresy instancji z env (jedna instancja = jeden poseł; ADR 026). CLI czyta zmienne z procesu oraz z plików
+# .env/.env.local w katalogu projektu i w supabase/. Lokalnie (supabase start) ustaw w .env.local:
+#   INSTANCE_SITE_URL=http://localhost:8080
+#   INSTANCE_LOGIN_URL=http://localhost:8080/login
+# Produkcję konfiguruje scripts/instances/provision.mjs (Management API), nie `supabase config push`.
+site_url = "env(INSTANCE_SITE_URL)"
+additional_redirect_urls = ["env(INSTANCE_LOGIN_URL)"]
+jwt_expiry = 3600
+# Rejestracja publiczna wyłączona (ADR 002) - konta zakłada Poseł przez admin-create-user.
+enable_signup = false
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+password_requirements = "lower_upper_letters_digits_symbols"
+minimum_password_length = 12
+
+# 2FA (TOTP) wymuszone w aplikacji dla wszystkich kont.
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.email]
+enable_signup = false
+double_confirm_changes = true
+enable_confirmations = true
+# true: zmiana hasła w Profilu na sesji starszej niż 24 h wymaga kodu z e-maila (reauthenticate()).
+secure_password_change = true
+
+# Custom email template dla zaproszen tworzonych przez admin-create-user (neutralny - adres z {{ .SiteURL }}).
+# Aplikuje sie przez `supabase config push` (CLI; `db push` tego nie robi) lub ręcznie w Dashboard:
+#   Authentication → Email Templates → Invite User → wklej zawartosc invite.html
+# Przed `config push` zawsze `supabase config diff --project-ref <ref>` - push nadpisuje ustawienia projektu bez pytania.
+[auth.email.template.invite]
+subject = "Zaproszenie do systemu biura poselskiego"
+content_path = "./supabase/templates/invite.html"

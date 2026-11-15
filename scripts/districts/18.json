@@ -1,0 +1,20 @@
+{
+  "number": 18,
+  "seat": "Siedlce",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "1461" },
+    { "teryt": "1464" },
+    { "teryt": "1403" },
+    { "teryt": "1410" },
+    { "teryt": "1411" },
+    { "teryt": "1412" },
+    { "teryt": "1415" },
+    { "teryt": "1416" },
+    { "teryt": "1424" },
+    { "teryt": "1426" },
+    { "teryt": "1429" },
+    { "teryt": "1433" },
+    { "teryt": "1435" }
+  ]
+}

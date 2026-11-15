@@ -1,0 +1,16 @@
+{
+  "number": 25,
+  "seat": "Gdańsk",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "2261" },
+    { "teryt": "2264" },
+    { "teryt": "2204" },
+    { "teryt": "2207" },
+    { "teryt": "2209" },
+    { "teryt": "2210" },
+    { "teryt": "2213" },
+    { "teryt": "2216" },
+    { "teryt": "2214" }
+  ]
+}

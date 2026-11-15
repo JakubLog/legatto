@@ -1,0 +1,20 @@
+{
+  "number": 23,
+  "seat": "Rzeszów",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "1863" },
+    { "teryt": "1864" },
+    { "teryt": "1803" },
+    { "teryt": "1806" },
+    { "teryt": "1808" },
+    { "teryt": "1810" },
+    { "teryt": "1811" },
+    { "teryt": "1812" },
+    { "teryt": "1815" },
+    { "teryt": "1816" },
+    { "teryt": "1818" },
+    { "teryt": "1819" },
+    { "teryt": "1820" }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "number": 5,
+  "seat": "Toruń",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "0462" },
+    { "teryt": "0463" },
+    { "teryt": "0464" },
+    { "teryt": "0401" },
+    { "teryt": "0402" },
+    { "teryt": "0404" },
+    { "teryt": "0405" },
+    { "teryt": "0406" },
+    { "teryt": "0408" },
+    { "teryt": "0411" },
+    { "teryt": "0412" },
+    { "teryt": "0415" },
+    { "teryt": "0417" },
+    { "teryt": "0418" }
+  ]
+}

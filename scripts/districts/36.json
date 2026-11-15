@@ -1,0 +1,20 @@
+{
+  "number": 36,
+  "seat": "Kalisz",
+  "source": "Kodeks wyborczy, zał. nr 1 (Dz.U. 2026 poz. 1261); gminy, nazwy, id i wyróżnienie wyliczane przez scripts/build-okreg-geojson.mjs",
+  "powiaty": [
+    { "teryt": "3061" },
+    { "teryt": "3063" },
+    { "teryt": "3004" },
+    { "teryt": "3006" },
+    { "teryt": "3007" },
+    { "teryt": "3008" },
+    { "teryt": "3011" },
+    { "teryt": "3012" },
+    { "teryt": "3013" },
+    { "teryt": "3017" },
+    { "teryt": "3018" },
+    { "teryt": "3020" },
+    { "teryt": "3022" }
+  ]
+}
