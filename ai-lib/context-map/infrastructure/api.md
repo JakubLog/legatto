@@ -298,7 +298,7 @@
 
 ## Konwencje
 
-- Query keys: tablica, scoped do entity: `['users']`, `['users', userId]`, `['cases', workspaceId]`
+- Query keys: tablica, scoped do entity: `['users']`, `['cases', ...filtry]`, `['cases', 'detail', id]`
 - staleTime: 60s domyślnie; mutacje invalidate konkretnych keys (NIGDY broad invalidate)
 - Select: explicit kolumny (NIGDY `select('*')`)
 - Errors: rzucane do React Query → `onError` w komponencie z `toast.error()`

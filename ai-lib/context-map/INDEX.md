@@ -39,7 +39,7 @@
 | 001 | RLS w Supabase = single source of truth dla autoryzacji; frontend guards = UX | 2026-04-25 |
 | 002 | Public sign-up wyłączony; konta tworzy Poseł przez Edge Function z service_role | 2026-04-25 |
 | 003 | Audit log od dnia 1 - sektor publiczny wymaga sladow | 2026-04-25 |
-| 004 | Stack: Vite + React 18 + TS + Tailwind + Shadcn + React Query + Supabase (zgodny z OurMoney rules, bez i18n) | 2026-04-25 |
+| 004 | Stack: Vite + React 18 + TS + Tailwind + Shadcn + React Query + Supabase (bez i18n) | 2026-04-25 |
 | 005 | PWA włączone od Fazy 1; ikony placeholder (SVG), PNG przed produkcja | 2026-04-25 |
 | 006 | Mapa okręgu (Faza 2): Leaflet + OSM + dane TERYT (GUS) - OSS, free | 2026-04-25 |
 | 007 | AI interpelacji (Faza 6): Anthropic Claude Sonnet 4.6 wolany przez Edge Function | 2026-04-25 |

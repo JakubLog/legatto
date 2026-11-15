@@ -11,16 +11,7 @@ Jeśli uruchomiono z `--qa`:
 - `pnpm lint` → STOP jeśli fail
 - `pnpm build:dev` → STOP jeśli fail
 - Quick security check (select('*'), hardcoded secrets, brak auth)
-- i18n check (patrz krok 2b)
-
-### 2b. i18n double-check (ZAWSZE)
-Sprawdź czy zmienione pliki .tsx zawierają:
-- Hardcoded polskie/angielskie stringi w JSX (powinny używać `t('key')`)
-- Hardcoded `{ locale: pl }` lub `'pl-PL'` (powinno być `getDateLocale(i18n.language)`)
-- Hardcoded `"zł"` / `"$"` / `"€"` (powinno być `getCurrencySymbol()`)
-- Shadowing zmiennej `t` w iteratorach (`.map(t =>` zamiast `.map(tx =>`)
-- Nowe user-facing stringi bez kluczy w `src/i18n/locales/{pl,en}/*.json`
-Jeśli znaleziono → napraw PRZED commitem.
+- Dane konkretnego posła/biura w kodzie lub dokumentacji (ADR 026) → usuń PRZED commitem
 
 ### 3. Ocena context-map
 Sprawdź czy zmiany wymagają aktualizacji `ai-lib/context-map/`:
@@ -28,7 +19,7 @@ Sprawdź czy zmiany wymagają aktualizacji `ai-lib/context-map/`:
 - Zmiana istniejącego feature → aktualizuj feature doc (Historia Zmian)
 - Zmiana DB → aktualizuj infrastructure/database.md
 - Nowy endpoint/hook → aktualizuj infrastructure/api.md
-- Zmiana storage → aktualizuj infrastructure/storage.md
+- Zmiana storage → aktualizuj infrastructure/database.md (sekcja "Storage buckety")
 
 **NIE aktualizuj** przy: typo, CSS, refactoring bez zmiany zachowania, update deps
 

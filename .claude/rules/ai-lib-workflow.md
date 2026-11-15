@@ -31,13 +31,13 @@ Po zakończeniu implementacji która zmienia funkcjonalność projektu:
 - Zmiana istniejącego feature → aktualizuj odpowiedni plik w `features/`
 - Zmiana schematu DB → aktualizuj `infrastructure/database.md`
 - Nowy endpoint API / hook → aktualizuj `infrastructure/api.md`
-- Zmiana storage → aktualizuj `infrastructure/storage.md`
+- Zmiana storage → aktualizuj `infrastructure/database.md` (sekcja "Storage buckety")
 - Decyzja architektoniczna → dodaj ADR w INDEX.md
 
 ### Co aktualizować:
 1. **INDEX.md** - Log Ostatnich Zmian (zawsze), Feature Registry (jeśli nowa feature)
 2. **Relevantny feature doc** - sekcja Historia Zmian + dotknięty obszar
-3. **Relevantny infrastructure doc** - jeśli zmiana dotyczy DB/API/Storage
+3. **Relevantny infrastructure doc** - jeśli zmiana dotyczy DB/API/Storage (`database.md`, `api.md`)
 
 ### Kiedy NIE aktualizować:
 - Poprawka typo w kodzie
@@ -62,19 +62,16 @@ Używaj `/commit` zamiast ręcznego commitowania. Skill automatycznie:
 ```
 ai-lib/
   context-map/
-    INDEX.md              ← Główny spis treści (czytaj ZAWSZE)
-    app-context.md        ← Kontekst biznesowy, persony, user journeys
-    security-rules.md     ← Reguły bezpieczeństwa (20+ reguł)
-    features/             ← Dokumentacja per feature (15 plików)
-      auth.md, budget.md, commitments.md, dashboard.md,
-      history.md, income.md, investments.md, notifications.md,
-      onboarding.md, partner-system.md, savings.md, settings.md,
-      analytics.md, landing-waitlist.md
+    INDEX.md              ← Główny spis treści: Feature Registry, ADR, Log Zmian (czytaj ZAWSZE)
+    app-context.md        ← Kontekst biznesowy (szablon)
+    security-rules.md     ← Reguły bezpieczeństwa (#1-30)
+    features/             ← Dokumentacja per feature
+      foundation.md, kontakty.md, sprawy.md, kalendarz.md, teren.md,
+      interpelacje.md, budzet.md, mcp-integration.md, powiadomienia.md,
+      dokumenty-do-podpisu.md, kosz.md
     infrastructure/       ← Dokumentacja infrastruktury
-      database.md         ← 21 tabel, widoki, RPC, enumy, RLS
-      api.md              ← 9 Edge Functions, hooki, routing
-      storage.md          ← Supabase Storage (avatars)
-      analytics.md        ← PostHog: 39 eventow, konfiguracja, privacy
+      database.md         ← tabele, RLS, RPC, enumy, Storage buckety, migracje
+      api.md              ← Edge Functions, Vercel Functions, query keys, hooki
   plans/                  ← Plany implementacyjne
     README.md             ← Konwencje i szablon
     YYYY-MM-DD-opis.md    ← Poszczególne plany
@@ -82,5 +79,5 @@ ai-lib/
 
 ---
 
-_Ostatnia aktualizacja: 2026-02-22_
-_Wersja: 1.0.0 - Migracja na OurMoney_
+_Ostatnia aktualizacja: 2026-11-15_
+_Wersja: 1.1.0 - legatto-app_

@@ -1,4 +1,4 @@
-# OurMoney - Reguły Bezpieczeństwa
+# Legatto - Reguły Bezpieczeństwa
 
 > 20+ reguł bezpieczeństwa dla Vite SPA + Supabase. Czytaj przed praca z auth, inputami, API, danymi użytkowników.
 
@@ -6,22 +6,21 @@
 
 ## Supabase & RLS (#1-4)
 
-### #1 RLS na każdej tabeli z danymi użytkowników
-- KAŻDE zapytanie filtrowane przez RLS (workspace_id lub user_id)
-- NIGDY bypass RLS (service_role key TYLKO w Edge Functions)
+### #1 RLS na każdej tabeli z danymi biura
+- KAŻDE zapytanie klienta filtrowane przez RLS (rola, `is_aal2()`, `data_scope`)
+- NIGDY bypass RLS w kliencie (service_role key TYLKO w Edge Functions i `api/`)
 - Policy coverage: SELECT, INSERT, UPDATE, DELETE
 
-### #2 Workspace isolation
-- Użytkownik NIE może podmieniac workspace_id w zapytaniach
-- RLS weryfikuje przynależność do workspace przez workspace_members
-- Funkcja `user_workspace_ids(auth.uid())` jako source of truth
+### #2 Izolacja instancji i zakres danych
+- Jedna instancja = jeden poseł (ADR 026): dane biur różnych posłów są w osobnych projektach Supabase, bez `tenant_id`
+- Widoczność rekordów w instancji: role + `data_scope` (`current_*_scope()`, ADR 016); kod na service_role odtwarza to przez `applyDataScope` (`api/_lib/access.ts`)
 
 ### #3 Kaskadowe usuwanie
 - CASCADE deletes na foreign keys dla spójności danych
-- Nigdy nie zostawiaj osieroconych rekordów
+- Nigdy nie zostawiaj osieroconych rekordów (także plików w Storage - kosz i crony sprzątają)
 
-### #4 Atomowe operacje finansowe
-- RPC zamiast multi-step (check → insert) dla operacji finansowych
+### #4 Atomowe operacje
+- RPC zamiast multi-step (check → insert), np. limity, zmiany statusów, `set_module_owners`
 - Upsert zamiast check-then-insert (race conditions)
 
 ---
@@ -63,9 +62,9 @@ if (!parsed.success) return new Response('Invalid input', { status: 400 })
 ```
 
 ### #10 Upload validation
-- Rozmiar pliku (avatars: max 5MB)
-- Typ MIME (image/jpeg, image/png, image/gif, image/webp)
-- Rozszerzenie pliku
+- Limity rozmiaru i typy MIME wymuszone na bucketach Storage (`file_size_limit`, `allowed_mime_types`; lista: `infrastructure/database.md` → "Storage buckety")
+- Klient sprawdza to samo przed wysłaniem (komunikat zamiast błędu serwera)
+- Ścieżka pliku w folderze rekordu nadrzędnego (polityki Storage sprawdzają widoczność rodzica)
 
 ---
 
@@ -107,34 +106,29 @@ if (!parsed.success) return new Response('Invalid input', { status: 400 })
 ## Logowanie & Privacy (#16-18)
 
 ### #16 NIGDY nie loguj PII
-- Emaile, imiona, IP, tokeny → NIGDY w console.log
-- Sentry: beforeSend filters
-- PostHog: ranges zamiast exact values
+- E-maile, imiona, dane wyborców, IP, tokeny → NIGDY w `console.log` / `console.error`
+- Logi serwera: identyfikatory i kody błędów, nie treść rekordów
 
-### #17 PostHog privacy
-- Kwoty ZAWSZE jako ranges: getAmountRange(amount) → "<50", "50-200", "200-500", "500-1000", "1000+"
-- NIGDY exact kwoty, emaile, imiona w eventach
-- autocapture: OFF
-- Session recording: maskAllInputs: true
+### #17 Dane osobowe wyborców
+- Zgłoszenia publiczne: IP tylko jako hash SHA-256 z solą `PUBLIC_SUBMISSION_IP_SALT`, zgody marketingowe jako jawne kolumny
+- Tryb prywatny (PIN) zasłania ekran portalu na współdzielonym urządzeniu
 
 ### #18 RODO compliance
-- Dane finansowe = sensitive data
-- Możliwość eksportu danych użytkownika (planned)
-- Możliwość usunięcia konta (planned)
-- Przechowywanie minimum niezbędnych danych
+- Dane wyborców i kontaktów = dane osobowe; przechowuj minimum niezbędnych danych
+- Usunięte rekordy: kosz 7 dni, potem trwale razem z plikami
+- Administratorem danych jest poseł danej instancji (stopka newslettera, formularz publiczny)
 
 ---
 
 ## Frontend (#19-20)
 
 ### #19 Nie eksponuj błędów DB
-- Błędy bazy → generic message w UI ("Coś poszło nie tak")
-- Szczegóły → console.error (dev) lub Sentry (prod)
+- Błędy bazy → ogólny komunikat w UI ("Coś poszło nie tak")
+- Szczegóły → `console.error` bez PII
 
-### #20 Invitation tokens
-- Kryptograficznie bezpieczne (crypto.randomBytes)
-- Expiration date
-- Jednorazowe użycie (status tracking)
+### #20 Zaproszenia i linki logowania
+- Konta zakłada wyłącznie Poseł/Administrator przez Edge Function `admin-create-user` (rejestracja wyłączona, ADR 002)
+- Linki zaproszeń i odzyskiwania generuje Supabase Auth (jednorazowe, z wygaśnięciem); jedyny dozwolony redirect = `AUTH_REDIRECT_URL`
 
 ---
 
@@ -200,14 +194,14 @@ if (!parsed.success) return new Response('Invalid input', { status: 400 })
 | A01 | Broken Access Control | RLS z aal2, data_scope, jawny aal2 w Edge Functions / Vercel, auth checks |
 | A02 | Cryptographic Failures | Supabase handles encryption, HTTPS |
 | A03 | Injection | Supabase client (parameterized), Zod validation |
-| A04 | Insecure Design | Workspace model, RLS-first |
+| A04 | Insecure Design | Jedna instancja na posła, RLS-first, operacje przez RPC |
 | A05 | Security Misconfiguration | Edge Function auth, env vars |
 | A06 | Vulnerable Components | pnpm audit, regular updates (`xlsx` z CDN SheetJS, nie z npm) |
 | A07 | Auth Failures | Supabase Auth, token refresh |
 | A08 | Data Integrity | Zod validation, RLS, CASCADE |
-| A09 | Logging Failures | Sentry, PostHog (no PII) |
+| A09 | Logging Failures | `audit_log` (triggery, RPC SECURITY DEFINER), logi bez PII |
 | A10 | SSRF | `safeFetch` (`api/_lib/safe-fetch.ts`) dla pobierania ICS z URL-i użytkownika |
 
 ---
 
-_Ostatnia aktualizacja: 2026-11-07_
+_Ostatnia aktualizacja: 2026-11-15_

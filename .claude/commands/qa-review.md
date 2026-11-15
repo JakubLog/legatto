@@ -1,4 +1,4 @@
-Wykonaj QA review kodu projektu OurMoney (Vite + React SPA + Supabase).
+Wykonaj QA review kodu projektu Legatto (Vite + React SPA + Supabase + Vercel Functions).
 
 ## Checklist
 
@@ -6,7 +6,7 @@ Wykonaj QA review kodu projektu OurMoney (Vite + React SPA + Supabase).
 - [ ] Pliki w poprawnych lokalizacjach (pages/, hooks/, components/, lib/)
 - [ ] Hooki w src/hooks/ (nie w components/)
 - [ ] Importy przez @/ alias (NIGDY relative ../../)
-- [ ] Komponenty <150 linii (split jeśli większe)
+- [ ] Nowe strony lazy-loaded w `App.tsx`
 
 ### 2. TypeScript
 - [ ] Zero `any` types (użyj `unknown` lub `z.infer<>`)
@@ -19,35 +19,32 @@ Wykonaj QA review kodu projektu OurMoney (Vite + React SPA + Supabase).
 - [ ] Mobile-first: bazowe = mobile, `md:` = desktop
 - [ ] cn() dla conditional styles
 - [ ] Shadcn/UI dla UI primitives (sprawdź src/components/ui/)
-- [ ] Touch targets min 44x44px
+- [ ] Container queries (`@md:`) w modułach, które bywają wąskie
 
 ### 4. Data
 - [ ] React Query z staleTime (WYMAGANE)
 - [ ] Explicit kolumny w .select() (NIGDY select('*'))
 - [ ] Zod validation na formularzach
 - [ ] Error handling (try/catch, toast na błędy)
-- [ ] Workspace-scoped queries (workspace_id)
+- [ ] Uprawnienia: role + `data_scope`; na service_role (`api/`, Edge Functions) jawnie rola i aal2
 
 ### 5. Security
 - [ ] Auth check na poczatku operacji (useAuth)
 - [ ] Brak API keys w kodzie frontend
-- [ ] Brak PII w console.log / PostHog
+- [ ] Brak PII (e-maile, imiona, dane wyborców) w `console.*`
 - [ ] Brak select('*') na sensitive data
 - [ ] Edge Functions: auth + Zod validation
 
-### 6. Testing & Quality
+### 6. Quality
+- [ ] `pnpm exec tsc -b` PASS
 - [ ] `pnpm lint` PASS
 - [ ] `pnpm build:dev` PASS
-- [ ] Happy path + edge cases testowane
-- [ ] Skeleton loading (nie spinnery)
+- [ ] Smoke test zmienionej ścieżki (happy path + edge cases)
+- [ ] Skeleton przy wczytywaniu list i kart
 
-### 7. i18n (wielojęzyczność)
-- [ ] Brak hardcoded polskich/angielskich stringow w JSX → użyj `t('key')`
-- [ ] Brak `{ locale: pl }` → użyj `getDateLocale(i18n.language)`
-- [ ] Brak hardcoded `"zł"` → użyj `getCurrencySymbol()`
-- [ ] Nowe user-facing stringi maja klucze w obu `src/i18n/locales/{pl,en}/*.json`
-- [ ] Brak shadowing `t` w iteratorach (`.map(t =>` → `.map(tx =>`)
-- [ ] Placeholdery formularzy przetłumaczone
+### 7. Dane instancji
+- [ ] Brak danych konkretnego posła/biura w kodzie, migracjach i dokumentacji (ADR 026)
+- [ ] Nowe treści widoczne publicznie pochodzą z `app_settings` / panelu
 
 ### 8. Red Flags (STOP jeśli znalezione)
 - TypeScript errors
@@ -56,7 +53,7 @@ Wykonaj QA review kodu projektu OurMoney (Vite + React SPA + Supabase).
 - SQL injection vectors
 - Missing RLS na nowych tabelach
 - console.log z danymi użytkowników
-- Hardcoded polskie stringi w nowym kodzie (brak i18n)
+- Dane konkretnego posła/biura w repozytorium
 
 ## Output
 ```
@@ -69,7 +66,8 @@ Wykonaj QA review kodu projektu OurMoney (Vite + React SPA + Supabase).
 | Styling | OK/WARN/FAIL | ... |
 | Data | OK/WARN/FAIL | ... |
 | Security | OK/WARN/FAIL | ... |
-| Testing | OK/WARN/FAIL | ... |
+| Quality | OK/WARN/FAIL | ... |
+| Dane instancji | OK/WARN/FAIL | ... |
 
 Red Flags: [none / lista]
 Rekomendacje: [lista]
