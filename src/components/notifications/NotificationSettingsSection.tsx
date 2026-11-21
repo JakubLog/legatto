@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SettingsSection } from '@/components/common/SettingsSection';
 import { PushDevicesList } from '@/components/notifications/PushDevicesList';
 import { useAuth } from '@/contexts/AuthContext';
+import { INSTANCE } from '@/lib/instance';
 import {
   testErrorMessage,
   useMyNotificationPreferences,
@@ -122,7 +123,9 @@ export function NotificationSettingsSection() {
             detail={profile?.email || 'Brak adresu e-mail w profilu'}
             unavailable={
               emailUnavailable &&
-              (isAdmin(role) ? (
+              (!INSTANCE.email ? (
+                'Wysyłka e-mail jest wyłączona przez operatora instancji.'
+              ) : isAdmin(role) ? (
                 <>
                   Wysyłka e-mail nie jest skonfigurowana. Skonfiguruj ją w{' '}
                   <Link to="/biuro/admin/integracje/powiadomienia" className="font-medium underline underline-offset-2">

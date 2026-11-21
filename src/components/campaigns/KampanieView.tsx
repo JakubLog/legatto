@@ -158,7 +158,7 @@ export function KampanieView({ renderHeader }: Props) {
 
       <p className="text-[13px] text-muted-foreground">
         Historia wysyłek z GetResponse.{' '}
-        {writer && !isMobile && 'Wydania wysłane z ePosła mają wersję online i można je zduplikować jako punkt wyjścia.'}
+        {writer && !isMobile && 'Wydania wysłane z aplikacji mają wersję online i można je zduplikować jako punkt wyjścia.'}
       </p>
 
       <CampaignsList

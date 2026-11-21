@@ -19,6 +19,7 @@ import { SettingsSection } from '@/components/common/SettingsSection';
 import { Mfa2FaCard } from '@/components/mfa/Mfa2FaCard';
 import { NotificationSettingsSection } from '@/components/notifications/NotificationSettingsSection';
 import { PrivacySetupDialog } from '@/components/privacy/PrivacySetupDialog';
+import { TrustedDevicesCard } from '@/components/auth/TrustedDevicesCard';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { usePrivacy } from '@/contexts/PrivacyContext';
@@ -421,6 +422,8 @@ export default function Profil() {
         </div>
       </SettingsSection>
       <PrivacySetupDialog open={privacyOpen} onOpenChange={setPrivacyOpen} />
+
+      <TrustedDevicesCard />
 
       <AccessibilitySettingsSection />
 

@@ -3,6 +3,9 @@
 > Pose ma mozliwosc podlaczenia portalu biura do Claude (Desktop / claude.ai) jako MCP server (`serverInfo.name` = `office-mcp`).
 > Z poziomu rozmowy z Claude moze zarzadzac sprawami wyborcow, kontaktami,
 > kalendarzem i interpelacjami biura.
+> Tylko przy `INSTANCE_AI=on` w env operatora (ADR 028): przy `off` `/api/mcp`, `/api/oauth/*` i
+> `/.well-known/oauth-authorization-server` zwracaja 404 `AI_DISABLED`, a strona Integracje → MCP i zgoda OAuth nie istnieja w SPA.
+> Tokeny i aplikacje OAuth zostaja w bazie (RPC `create_mcp_token` / `create_oauth_client` bez bramki) i dzialaja od razu po wlaczeniu.
 
 ## Cel
 
@@ -256,6 +259,7 @@ Wszystkie te akcje maja `metadata.via_mcp=true` + `metadata.token_id` (UUID toke
 
 | Data | Zmiana |
 |------|--------|
+| 2026-11-16 | Bramka `INSTANCE_AI` (ADR 028): `rejectIfAiDisabled` na poczatku `api/mcp.ts` (GET i POST; preflight CORS przechodzi) i wszystkich `api/oauth/*`. Kanal `portal` w `ToolChannel` dla recznych operacji interpelacji (`api/integracje.ts`) - `isToolExposed` nie pokazuje w nim zadnego narzedzia, audyt przez `service_log_audit` (bez `via_mcp`). `interpellations_submit` / `interpellations_resubmit` wolaja wspolne `submitInterpellation` / `resubmitInterpellation`; resubmit waliduje UUID i zwraca blad walidacji przy niezmienionej tresci (22023). |
 | 2026-11-10 | Przegląd bezpieczeństwa (API-MCP-1/2/4/5): adnotacje MCP z `idempotentHint` / `openWorldHint` i klasą zapis vs destrukcyjne (`nonDestructive`, `idempotent`, `openWorld` w `ToolDefinition`); znacznik `niezaufana_tresc` + `niezaufane_pola` dla spraw z formularza publicznego, wydarzeń ICS, wpisów audytu bez autora, reguła w instrukcjach `initialize`; `events_*` bez `is_public`, kanał `mcp` nie zmienia wydarzeń publicznych; `cases_list` z `source` i filtrem; liczniki `me_briefing` Pracownika wg `scope_*`; opisy bez danych pierwszej instancji; `isAal2Session(jwt, user)` wymaga zweryfikowanego czynnika; `scopeOf` bez wartości = `own`; `create_mcp_token(p_name, p_days default 90)` (1-180 dni), `expires_at NOT NULL`, UI z wyborem ważności. Migracja `20261110120000_mcp_token_expiry.sql`. |
 | 2026-11-07 | Rebranding: `serverInfo.name` `office-mcp` (tytul = `officeFullName`), klucz w snippecie Claude Desktop `biuro`, bez nazwy ePosel w instrukcjach i bledach OAuth. |
 | 2026-11-07 | Instancja dowolnego posła: `api/_lib/siteIdentity.ts` (dane z `app_settings.site_identity`, cache 5 min), prompty MCP i system prompt PoliAI bez nazwiska/okręgu w kodzie, formy "Poseł"/"Posłanka" z `mp_gender`; `raport_tygodniowy` bez osób biura (odesłanie do opiekunów obszarów); opis `powiaty_list` bez numeru okręgu. `listPrompts`/`renderPrompt`/`buildSystemPrompt` async. |

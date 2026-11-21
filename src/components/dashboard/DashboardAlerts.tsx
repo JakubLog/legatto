@@ -123,7 +123,7 @@ export function DashboardAlerts({
           <p className="font-medium">
             {interpellationCorrections} {pluralInterpellations(interpellationCorrections)} z uwagami {mp.genitive} do poprawy
           </p>
-          <p className="text-xs opacity-80">Popraw i wgraj ponownie przez Claude (MCP)</p>
+          <p className="text-xs opacity-80">Popraw i wgraj nową wersję</p>
         </AlertLink>
       )}
 

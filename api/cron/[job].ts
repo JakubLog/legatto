@@ -3,6 +3,7 @@
 //   /api/cron/poliai-purge   retencja PoliAI, sprzątanie plików, stare sesje
 //   /api/cron/notifications  powiadomienia dzienne/tygodniowe + wysyłka kolejki
 // Autoryzacja: nagłówek `Authorization: Bearer ${CRON_SECRET}` (ustawia Vercel Cron).
+// Brak CRON_SECRET = 503 (blad konfiguracji), zly sekret = 401.
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { runNotifications } from '../_lib/cron/notifications.js';
@@ -23,10 +24,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const run = Object.hasOwn(JOBS, job) ? JOBS[job] : undefined;
   if (!run) return res.status(404).json({ error: 'Unknown cron job' });
   const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    // Brak sekretu to blad konfiguracji instancji, nie brak autoryzacji wywolujacego.
+    console.error('[cron] CRON_SECRET nie jest ustawiony - crony nie dzialaja');
+    return res.status(503).json({ error: 'CRON_SECRET nie jest ustawiony' });
+  }
   // Porownanie w stalym czasie na skrotach SHA-256 (rowna dlugosc, brak wycieku dlugosci sekretu).
   const provided = createHash('sha256').update(req.headers.authorization ?? '').digest();
-  const expected = createHash('sha256').update(`Bearer ${secret ?? ''}`).digest();
-  if (!secret || !timingSafeEqual(provided, expected)) {
+  const expected = createHash('sha256').update(`Bearer ${secret}`).digest();
+  if (!timingSafeEqual(provided, expected)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   const result = await run();

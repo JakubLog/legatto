@@ -15,6 +15,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
+import { INSTANCE } from '@/lib/instance';
 import { notificationKindLabel } from '@/lib/notifications';
 
 // Powiadomienia w aplikacji (dzwonek): wiersz `get_my_inbox()` → tytuł, opis, link, ikona.
@@ -103,9 +104,11 @@ const SERVICE_LABELS: Record<string, string> = {
   ics: 'Kalendarz ICS',
 };
 
+// Strona MCP istnieje tylko z włączonym AI (INSTANCE_AI=on); inaczej stare powiadomienia prowadzą do listy integracji.
+const MCP_PATH = INSTANCE.ai ? '/biuro/admin/integracje/mcp' : '/biuro/admin/integracje';
 const SERVICE_PATHS: Record<string, string> = {
-  mcp: '/biuro/admin/integracje/mcp',
-  oauth: '/biuro/admin/integracje/mcp',
+  mcp: MCP_PATH,
+  oauth: MCP_PATH,
   ics: '/biuro/admin/integracje',
 };
 

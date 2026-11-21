@@ -156,3 +156,48 @@ export function useDeleteInterpellation() {
     },
   });
 }
+
+/**
+ * Ręczne wgranie przez Pracownika (bez Claude/MCP): api/integracje.ts sanityzuje HTML, wyodrębnia
+ * tekst i audytuje tak samo jak narzędzia MCP interpellations_submit / interpellations_resubmit.
+ */
+async function postInterpellation(op: 'interpellation_submit' | 'interpellation_resubmit', body: Record<string, unknown>) {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) throw new Error('Brak aktywnej sesji');
+  const res = await fetch(`/api/integracje?op=${op}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = (await res.json().catch(() => ({}))) as { interpellation?: { id: string }; error?: string; message?: string };
+  if (!res.ok || !data.interpellation) throw new Error(data.message ?? data.error ?? `HTTP ${res.status}`);
+  return data.interpellation;
+}
+
+export interface InterpellationUpload {
+  recipient: string;
+  subject: string;
+  html: string;
+}
+
+/** Nowa interpelacja (status "Nowa"). Zwraca id. */
+export function useSubmitInterpellation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: InterpellationUpload & { case_id?: string | null }) =>
+      (await postInterpellation('interpellation_submit', { ...input })).id,
+    onSuccess: (id) => invalidateInterpellations(qc, id),
+  });
+}
+
+/** Poprawiona wersja po uwagach ("Uwagi" -> "Po poprawkach"). */
+export function useResubmitInterpellation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: InterpellationUpload & { id: string }) =>
+      (await postInterpellation('interpellation_resubmit', { ...input })).id,
+    onSuccess: (id) => invalidateInterpellations(qc, id),
+  });
+}

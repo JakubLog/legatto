@@ -27,14 +27,24 @@ import { useMcpTokens } from '@/hooks/useMcpTokens';
 import { useGRStatus } from '@/hooks/useGetResponse';
 import { useSecretSettingsStatus } from '@/hooks/useSecretSettings';
 import { canWrite, isAdmin } from '@/lib/permissions';
+import { INSTANCE } from '@/lib/instance';
 import { cn } from '@/lib/utils';
 import { plural } from '@/components/public/publicFormat';
 
-/** Integracje dla każdej roli: MCP dla piszących, reszta tylko dla admina. */
+/** Integracje dla każdej roli: MCP dla piszących (tylko z włączonym AI), reszta tylko dla admina. */
 export default function IntegracjeIndex() {
   const { profile } = useAuth();
   const role = profile?.role;
-  const empty = !canWrite(role);
+  const showMcp = INSTANCE.ai && canWrite(role);
+  const admin = isAdmin(role);
+  const empty = !showMcp && !admin;
+  // Kafelki konfiguracji tylko na komputer (trasy w DesktopOnlyRoute) - lista do informacji na telefonie.
+  const desktopOnlyNames = [
+    ...(showMcp ? ['Claude MCP'] : []),
+    ...(admin ? ['GetResponse', 'kalendarze ICS'] : []),
+    ...(admin && INSTANCE.ai ? ['AI'] : []),
+    ...(admin ? ['powiadomienia'] : []),
+  ];
 
   return (
     <Page>
@@ -51,23 +61,21 @@ export default function IntegracjeIndex() {
       ) : (
         <>
           <div className="grid gap-4 @sm:grid-cols-2 @xl:grid-cols-3">
-            {canWrite(role) && <McpTile />}
-            {isAdmin(role) && (
+            {showMcp && <McpTile />}
+            {admin && (
               <>
                 <GetResponseTile />
                 <IcsTile />
-                <AiTile />
+                {INSTANCE.ai && <AiTile />}
                 <NotificationsTile />
               </>
             )}
           </div>
           {/* Kafelki konfiguracji tylko na komputer (trasy w DesktopOnlyRoute) są ukryte na telefonie. */}
-          {canWrite(role) && (
-            <p className="flex items-start gap-2 rounded-xl border border-dashed px-4 py-3 text-xs text-muted-foreground md:hidden">
-              <Monitor className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-              Konfiguracja pozostałych integracji (Claude MCP{isAdmin(role) ? ', GetResponse, kalendarze ICS, AI, powiadomienia' : ''}) jest dostępna na komputerze.
-            </p>
-          )}
+          <p className="flex items-start gap-2 rounded-xl border border-dashed px-4 py-3 text-xs text-muted-foreground md:hidden">
+            <Monitor className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            Konfiguracja integracji ({desktopOnlyNames.join(', ')}) jest dostępna na komputerze.
+          </p>
         </>
       )}
     </Page>
@@ -209,16 +217,14 @@ function IcsTile() {
       iconClassName="bg-sky-500/10 text-sky-600 dark:text-sky-400"
       name="Kalendarze ICS"
       tagline="Google, Apple, Outlook"
-      description="Import wydarzeń z zewnętrznych kalendarzy przez prywatny link ICS. Synchronizacja ręczna."
+      description="Import wydarzeń z zewnętrznych kalendarzy przez prywatny link ICS. Synchronizacja automatyczna raz dziennie, a w razie potrzeby także ręczna."
       desktopOnly
     />
   );
 }
 
 function AiTile() {
-  const secretsQ = useSecretSettingsStatus();
-  const hasKey = secretsQ.data?.anthropic_api_key.configured === true;
-  const connectionQ = useAiConnection(hasKey);
+  const connectionQ = useAiConnection();
 
   return (
     <IntegrationCard
@@ -227,18 +233,9 @@ function AiTile() {
       iconClassName="bg-violet-500/10 text-violet-600 dark:text-violet-400"
       name="AI (Claude)"
       tagline="Bezpośrednie API Claude"
-      description="Konfiguracja bazowa dla przyszłych funkcji AI. Interpelacje korzystają z Claude przez MCP."
+      description="Klucz API i model dla asystenta PoliAI oraz raportów AI w module Budżet."
       status={
-        secretsQ.isLoading ? (
-          <StatusPill tone="neutral" icon={<Loader2 className="h-3 w-3 animate-spin" />}>Ładowanie</StatusPill>
-        ) : (
-          <AiStatusBadge
-            hasKey={hasKey}
-            isLoading={connectionQ.isLoading}
-            connection={connectionQ.data}
-            error={connectionQ.error}
-          />
-        )
+        <AiStatusBadge isLoading={connectionQ.isLoading} connection={connectionQ.data} error={connectionQ.error} />
       }
       desktopOnly
     />
@@ -249,6 +246,8 @@ function NotificationsTile() {
   const adminQ = useNotificationsAdminStatus();
   const data = adminQ.data;
 
+  // E-mail liczy się tylko, gdy operator włączył go na instancji (INSTANCE_EMAIL=on).
+  const emailOn = INSTANCE.email && data?.settings.email_enabled === true;
   let status: ReactNode;
   if (adminQ.isLoading) {
     status = (
@@ -256,11 +255,11 @@ function NotificationsTile() {
     );
   } else if (!data) {
     status = <StatusPill tone="neutral">Brak danych</StatusPill>;
-  } else if (!data.settings.email_enabled && !data.settings.push_enabled) {
+  } else if (!emailOn && !data.settings.push_enabled) {
     status = <StatusPill tone="neutral">Wyłączone</StatusPill>;
-  } else if (data.settings.email_enabled && !data.key.configured) {
+  } else if (emailOn && !data.key.configured) {
     status = <StatusPill tone="warning">Brak klucza</StatusPill>;
-  } else if (data.settings.email_enabled && !data.settings.from_email) {
+  } else if (emailOn && !data.settings.from_email) {
     status = <StatusPill tone="warning">Brak nadawcy</StatusPill>;
   } else {
     // Także samo push przy świadomie wyłączonym e-mailu.
@@ -275,8 +274,12 @@ function NotificationsTile() {
       icon={Bell}
       iconClassName="bg-amber-500/10 text-amber-600 dark:text-amber-400"
       name="Powiadomienia"
-      tagline="E-mail (Resend), push"
-      description="Powiadomienia o sprawach, wydarzeniach i bezpieczeństwie kont: e-mail przez Resend i push w aplikacji."
+      tagline={INSTANCE.email ? 'E-mail (Resend), push' : 'Push'}
+      description={
+        INSTANCE.email
+          ? 'Powiadomienia o sprawach, wydarzeniach i bezpieczeństwie kont: e-mail przez Resend i push w aplikacji.'
+          : 'Powiadomienia o sprawach, wydarzeniach i bezpieczeństwie kont jako push w aplikacji.'
+      }
       status={status}
       desktopOnly
     />

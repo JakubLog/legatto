@@ -50,8 +50,7 @@ const CONFIG: Record<InterpellationDecision, DecisionConfig> = {
   },
   uwagi: {
     title: 'Zgłoś uwagi',
-    description:
-      'Pracownik zobaczy uwagi, poprawi interpelację i wgra nową wersję przez Claude (MCP).',
+    description: 'Pracownik zobaczy uwagi, poprawi interpelację i wgra nową wersję.',
     confirm: 'Przekaż uwagi',
     success: 'Uwagi przekazane pracownikowi',
     icon: MessageSquareText,

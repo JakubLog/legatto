@@ -12,9 +12,10 @@ import { getServiceClient } from './_lib/supabase.js';
 
 const SLUG_RE = /^[A-Za-z0-9_-]{16}$/;
 
-// fonts.googleapis.com: arkusz fontu z szablonu (src/lib/newsletter/render.ts); CSS nie wykonuje kodu.
+// Samohostowana czcionka szablonu (src/lib/newsletter/render.ts, public/fonts/newsletter/) -
+// font-src https: data: (nie 'self': sandbox daje stronie nieprzewidywalny origin).
 const SANDBOX_CSP =
-  "sandbox; default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https: data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+  "sandbox; default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; font-src https: data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
 function messagePage(title: string, message: string): string {
   return `<!DOCTYPE html>

@@ -6,13 +6,14 @@ export function auditMetadata(ctx: McpAuthContext, metadata: Record<string, unkn
   return {
     ...metadata,
     ...(ctx.tokenId ? { token_id: ctx.tokenId } : {}),
-    ...(ctx.channel === 'poliai' ? { via: 'poliai' } : {}),
+    ...(ctx.channel !== 'mcp' ? { via: ctx.channel } : {}),
   };
 }
 
 // Zwraca true, gdy wpis trafil do audit_log. Przy bledzie loguje do konsoli i zwraca
 // false - wolajacy decyduje, czy przerwac operacje (mcp.tool_call przed handlerem
-// przerywa, patrz api/mcp.ts).
+// przerywa, patrz api/mcp.ts). Kanal 'portal' (operacje portalu bez AI) idzie przez
+// service_log_audit - bez znacznika via_mcp, ktory mcp_log_audit dokleja kazdemu wpisowi.
 export async function logAudit(
   ctx: McpAuthContext,
   action: string,
@@ -23,7 +24,7 @@ export async function logAudit(
   } = {},
 ): Promise<boolean> {
   const supabase = getServiceClient();
-  const { error } = await supabase.rpc('mcp_log_audit', {
+  const { error } = await supabase.rpc(ctx.channel === 'portal' ? 'service_log_audit' : 'mcp_log_audit', {
     p_user_id: ctx.userId,
     p_action: action,
     p_entity_type: options.entityType ?? null,

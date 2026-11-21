@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { canWrite } from '@/lib/permissions';
+import { INSTANCE } from '@/lib/instance';
 import { usePoliAI, type PoliAIConversation } from '@/hooks/usePoliAI';
 
 interface PoliAIPanelContextValue {
@@ -40,15 +41,16 @@ function PoliAIEnabledProvider({ children }: { children: ReactNode }) {
 
 /**
  * Asystent PoliAI: stan panelu + rozmowa (w pamięci, przetrwa nawigację) i skrót Ctrl/Cmd+J.
- * Tylko dla ról z zapisem (Poseł, Administrator, Pracownik) - dla pozostałych same dzieci.
+ * Tylko gdy operator włączył AI (INSTANCE_AI=on) i dla ról z zapisem (Poseł, Administrator,
+ * Pracownik) - w pozostałych przypadkach same dzieci: bez panelu, przycisku i skrótu.
  */
 export function PoliAIProvider({ children }: { children: ReactNode }) {
   const { profile } = useAuth();
-  if (!canWrite(profile?.role)) return <>{children}</>;
+  if (!INSTANCE.ai || !canWrite(profile?.role)) return <>{children}</>;
   return <PoliAIEnabledProvider>{children}</PoliAIEnabledProvider>;
 }
 
-/** Stan panelu albo `null`, gdy PoliAI jest niedostępny dla roli użytkownika. */
+/** Stan panelu albo `null`, gdy PoliAI jest wyłączony na instancji lub niedostępny dla roli użytkownika. */
 export function usePoliAIPanel(): PoliAIPanelContextValue | null {
   return useContext(PoliAIPanelContext);
 }

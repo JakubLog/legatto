@@ -2,6 +2,8 @@
 // podsumowania tygodnia (notifications_enqueue_daily) i wysyłka całej kolejki - także
 // zaległej, gdy natychmiastowa wysyłka przez pg_net nie zadziałała. Przy okazji rejestracja
 // adresu wysyłki z konfiguracji (np. po wdrożeniu albo zmianie domeny).
+// INSTANCE_EMAIL=off: kolejka idzie dalej (push), e-maile dostają email_status 'skipped'
+// w dispatchPending/loadDispatchContext - bez zapytań do Resend.
 import { getServiceClient } from '../supabase.js';
 import { dispatchPending } from '../notifications/dispatch.js';
 import { syncDispatchRegistration } from '../notifications/settings.js';

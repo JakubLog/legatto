@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import fs from 'node:fs';
 import path from 'node:path';
+import { instanceFlags } from './api/_lib/instance.ts';
 
 /**
  * Tytuł aplikacji instancji (jedna instancja = jeden poseł) - build-time, bo `index.html`
@@ -53,8 +54,8 @@ function instanceCsp(mode: string): Plugin {
         `frame-src https://challenges.cloudflare.com ${api}`,
         `connect-src 'self' ${api} ${ws} https://challenges.cloudflare.com`,
         `img-src 'self' data: blob: ${api}`,
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-        "font-src 'self' data: https://fonts.gstatic.com",
+        "style-src 'self' 'unsafe-inline'",
+        "font-src 'self' data:",
         "object-src 'none'",
         "base-uri 'none'",
         "form-action 'self'",
@@ -177,6 +178,11 @@ export default defineConfig(({ mode }) => ({
   // Do bundla klienta trafiają VITE_* oraz publiczny site key Turnstile (TURNSTILE_KEY, Vercel env).
   // Nie dopisuj tu prefiksu 'TURNSTILE_' - wystawiłby sekret TURNSTILE_SECRET.
   envPrefix: ['VITE_', 'TURNSTILE_KEY'],
+  // Flagi instancji (INSTANCE_AI, INSTANCE_EMAIL) z tego samego env co api/ - UI czyta je z src/lib/instance.ts.
+  // Build-time: zmiana flagi wymaga ponownego wdrożenia.
+  define: {
+    __INSTANCE__: JSON.stringify(instanceFlags(loadEnv(mode, process.cwd(), ''))),
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -216,8 +222,9 @@ export default defineConfig(({ mode }) => ({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2,geojson}'],
-        // Pliki pdf.js (dekodery skanów, fonty) pobierane tylko przy podglądzie PDF.
-        globIgnores: ['pdfjs/**'],
+        // Pliki pdf.js (dekodery skanów, fonty) pobierane tylko przy podglądzie PDF; fonty newslettera
+        // tylko dla wersji online i e-maili (public/fonts/newsletter) - poza precache PWA.
+        globIgnores: ['pdfjs/**', 'fonts/newsletter/**'],
         navigateFallback: '/index.html',
         // /n/<slug> = wersja online newslettera serwowana przez api/newsletter-view (nie SPA).
         navigateFallbackDenylist: [/^\/api\//, /^\/n\//],

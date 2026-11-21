@@ -1,7 +1,7 @@
 // POST /api/poliai - PoliAI, asystent AI w aplikacji (panel z prawej strony).
 //
 // Sesja Supabase (Bearer access_token, aal2) -> kontekst jak w MCP (rola, zakres danych),
-// model Claude z kluczem i modelem z Integracje -> AI, narzedzia z rejestru MCP
+// model Claude z kluczem i modelem z env operatora albo Integracje -> AI, narzedzia z rejestru MCP
 // (api/_lib/tools). Odpowiedz to strumien SSE (kontrakt: ai-lib/plans/2026-10-25-poliai.md).
 //
 // Historia rozmowy jest w bazie (poliai_conversations) - klient wysyla conversation_id i nowa
@@ -9,7 +9,7 @@
 // decyzji uzytkownika (approvals). Kazde zadanie jest audytowane (poliai.request) i liczone do
 // dziennego limitu; kazde wywolanie narzedzia - mcp.tool_call z via=poliai.
 //
-// Obok glownego modelu szybki model (INTRO_MODEL) pisze wstep, przyciski kolejnych krokow,
+// Obok glownego modelu szybki model (AiSettings.fastModel) pisze wstep, przyciski kolejnych krokow,
 // tytul i podsumowanie rozmowy (pamiec miedzy chatami) oraz streszczenie przy kompresji kontekstu.
 //
 // POST /api/poliai?op=attachment - przygotowanie zalacznika (walidacja plikow w buckecie, OCR,
@@ -19,11 +19,18 @@
 // wymuszone narzedzie glownego modelu, zapis w budget_reports; api/_lib/poliai/budget-report.ts).
 // Kontrakt: ai-lib/plans/2026-10-26-budzet-analityka-raporty-ai.md.
 //
+// POST /api/poliai?op=connection - weryfikacja klucza (GET /v1/models) i lista modeli dla
+// Integracje -> AI; tylko Posel i Administrator. Odpowiedz JSON, bledy Anthropic jako ok: false.
+//
+// INSTANCE_AI != on: kazda operacja = 404 AI_DISABLED, zanim dotkniemy sesji, bazy i sekretow.
+//
 // Operacje w tej samej funkcji, bo Vercel Hobby ma limit liczby funkcji.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import type { McpAuthContext } from './_lib/auth.js';
+import { isPoselRole, type McpAuthContext } from './_lib/auth.js';
 import { logAudit } from './_lib/audit.js';
+import { operatorAi, rejectIfAiDisabled } from './_lib/instance.js';
+import { getSiteIdentity, mpForms } from './_lib/siteIdentity.js';
 import { callTool, getTool } from './_lib/tools/index.js';
 import {
   appendUserMessage,
@@ -42,6 +49,8 @@ import {
 } from './_lib/poliai/conversation.js';
 import {
   AnthropicApiError,
+  describeAnthropicError,
+  listModels,
   streamIntro,
   streamModel,
   suggestActions,
@@ -53,7 +62,6 @@ import {
   buildSuggestPrompt,
   buildSystemPrompt,
   buildTools,
-  INTRO_MODEL,
   INTRO_SYSTEM,
   SUGGEST_SYSTEM,
 } from './_lib/poliai/prompt.js';
@@ -79,6 +87,7 @@ const MAX_BODY_BYTES = 64 * 1024;
 // Przygotowanie zalacznika: tekst stron (maks. 150 000 znakow) - obrazy ida prosto do bucketu.
 const MAX_ATTACHMENT_BODY_BYTES = 1024 * 1024;
 const MAX_BUDGET_REPORT_BODY_BYTES = 1024;
+const CONNECTION_TIMEOUT_MS = 15_000;
 const DAILY_REQUEST_LIMIT = 300;
 const REQUEST_LIMIT = {
   action: 'poliai.request',
@@ -165,11 +174,17 @@ async function executeToolUses(
 }
 
 /** Wstep nigdy nie przerywa odpowiedzi - blad tylko w logach, UI pokazuje sama odpowiedz. */
-async function runIntro(apiKey: string, messages: ApiMessage[], signal: AbortSignal, send: Send): Promise<string> {
+async function runIntro(settings: AiSettings, messages: ApiMessage[], signal: AbortSignal, send: Send): Promise<string> {
   let text = '';
   try {
     await streamIntro(
-      { apiKey, model: INTRO_MODEL, system: INTRO_SYSTEM, prompt: buildIntroPrompt(messages), signal },
+      {
+        apiKey: settings.apiKey,
+        model: settings.fastModel,
+        system: INTRO_SYSTEM,
+        prompt: buildIntroPrompt(messages),
+        signal,
+      },
       (delta) => {
         text += delta;
         send({ type: 'intro_delta', text: delta });
@@ -193,11 +208,11 @@ async function afterTurn(
   attachments: ResolvedAttachments,
   turnKey: number,
   lastInputTokens: number,
-  apiKey: string,
+  settings: AiSettings,
   signal: AbortSignal,
   send: Send,
 ): Promise<void> {
-  const fast = { apiKey, model: INTRO_MODEL, signal };
+  const fast = { apiKey: settings.apiKey, model: settings.fastModel, signal };
   const warn = (what: string) => (err: unknown) => {
     if (!signal.aborted) console.warn(`[poliai] ${what} failed`, err instanceof Error ? err.message : err);
   };
@@ -282,12 +297,54 @@ async function handleBudgetReport(req: VercelRequest, res: VercelResponse) {
   }
 }
 
+/**
+ * POST /api/poliai?op=connection - klucz (GET /v1/models) i lista modeli; tylko Posel i Administrator.
+ * Brak klucza i bledy Anthropic jako 200 `{ ok: false, code }` - UI pokazuje stan, nie wyjatek.
+ * `operator_managed`: klucz / model z env operatora (panel ich nie zmienia). Klucz operatora blokuje
+ * tez model (AI_MODEL albo domyslny) - patrz requireAiSettings.
+ */
+async function handleConnection(req: VercelRequest, res: VercelResponse) {
+  const operator = operatorAi();
+  const operatorManaged = { key: operator.apiKey !== null, model: operator.model !== null || operator.apiKey !== null };
+  try {
+    const ctx = await authenticate(req);
+    if (!isPoselRole(ctx.userRole)) {
+      const mp = mpForms((await getSiteIdentity()).mp_gender);
+      throw new HttpError(403, `Sprawdzenie połączenia AI jest dostępne dla ${mp.genitive} i Administratora`);
+    }
+    const settings = await requireAiSettings();
+    const models = await listModels(settings.apiKey, AbortSignal.timeout(CONNECTION_TIMEOUT_MS)).catch((err: unknown) => {
+      if (err instanceof AnthropicApiError) throw err;
+      // Timeout albo blad sieci - jak niedostepna usluga.
+      console.warn('[poliai] connection check failed', err instanceof Error ? err.message : err);
+      throw describeAnthropicError(503, '');
+    });
+    return res.status(200).json({
+      ok: true,
+      model: settings.model,
+      model_available: models.some((m) => m.id === settings.model),
+      models,
+      operator_managed: operatorManaged,
+    });
+  } catch (err) {
+    if (err instanceof AnthropicApiError || (err instanceof HttpError && err.code === 'AI_NOT_CONFIGURED')) {
+      return res
+        .status(200)
+        .json({ ok: false, status: err.status, code: err.code, error: err.message, operator_managed: operatorManaged });
+    }
+    if (err instanceof HttpError) return res.status(err.status).json({ error: err.message, code: err.code });
+    throw err;
+  }
+}
+
 async function handlerInner(req: VercelRequest, res: VercelResponse) {
+  if (rejectIfAiDisabled(res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Wymagana metoda POST' });
   // req.url zamiast req.query - adapter w vite.config.ts (pnpm dev) nie ustawia query.
   const op = new URL(req.url ?? '', 'http://localhost').searchParams.get('op');
   if (op === 'attachment') return handleAttachment(req, res);
   if (op === 'budget-report') return handleBudgetReport(req, res);
+  if (op === 'connection') return handleConnection(req, res);
   if (op !== null) return res.status(400).json({ error: 'Nieznana operacja PoliAI' });
   if (Number(req.headers['content-length'] ?? 0) > MAX_BODY_BYTES) {
     return res.status(413).json({ error: 'Wiadomość jest za długa.' });
@@ -371,7 +428,7 @@ async function handlerInner(req: VercelRequest, res: VercelResponse) {
 
   // Nowa wiadomosc: szybki model pisze wstep, a glowny model w tym czasie mysli i wola narzedzia.
   const intro = newMessage
-    ? runIntro(settings.apiKey, messages, abort.signal, send).then((text) => {
+    ? runIntro(settings, messages, abort.signal, send).then((text) => {
         if (text) conversation.extras[String(turnKey)] = { intro: text, actions: [] };
       })
     : null;
@@ -436,7 +493,7 @@ async function handlerInner(req: VercelRequest, res: VercelResponse) {
         send({ type: 'done', stop_reason: response.stopReason });
         if (response.stopReason === 'end_turn' && textOf(assistant)) {
           await intro;
-          await afterTurn(conversation, attachments, turnKey, lastInputTokens, settings.apiKey, abort.signal, send);
+          await afterTurn(conversation, attachments, turnKey, lastInputTokens, settings, abort.signal, send);
         }
         return;
       }

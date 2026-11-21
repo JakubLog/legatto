@@ -11,3 +11,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/** Flagi instancji z vite.config.ts (define). Używaj przez `INSTANCE` z `@/lib/instance`. */
+declare const __INSTANCE__: { ai: boolean; email: boolean };

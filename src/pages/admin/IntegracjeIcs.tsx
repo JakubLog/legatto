@@ -14,8 +14,8 @@ export default function AdminIntegracjeIcs() {
         description={
           <>
             Importuj zdarzenia z zewnętrznych kalendarzy (Google, Apple, Outlook) przez prywatny
-            link ICS. Synchronizacja ręczna — kliknij <strong>Synchronizuj</strong>, aby
-            zaktualizować wydarzenia w systemie.
+            link ICS. Aktywne kalendarze synchronizują się automatycznie raz dziennie (rano) —
+            kliknij <strong>Synchronizuj</strong>, aby zaktualizować wydarzenia od razu.
           </>
         }
       />

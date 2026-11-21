@@ -187,7 +187,10 @@ Budżetu, tylko tydzień). Puste podsumowanie = brak wysyłki.
 | `admin_save` | POST | Poseł/administrator |
 | `dispatch` | POST | token z `notification_server_config` (pg_net) |
 
-E-mail dostępny, gdy: `email_enabled`, klucz, `from_email` i adres portalu (adres instancji,
+E-mail dostępny, gdy: `INSTANCE_EMAIL=on` (env operatora, ADR 028 - przy `off` `resend.ts` odmawia każdego
+zapytania, kolejka oznacza e-mail `skipped`, `op=test` z kanałem e-mail zwraca 409 `email_wylaczony`, panel
+pokazuje „Wysyłka e-mail jest wyłączona przez operatora instancji”, zapisane `email_enabled` zostaje, ale jest
+pomijane; push działa bez zmian), `email_enabled`, klucz, `from_email` i adres portalu (adres instancji,
 inaczej `app_url`). Treść: `api/_lib/notifications/templates.ts` (bloki → HTML z inline CSS + tekst).
 Tytuły spraw/wydarzeń/interpelacji i uwagi do interpelacji tylko przy `include_titles`. Push nigdy
 nie zawiera tytułów (ekran blokady): tytuł rodzaju, krótki opis, link. `public_submission`: temat

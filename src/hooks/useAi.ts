@@ -1,17 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FunctionsHttpError } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
 import { SECRET_SETTINGS_STATUS_KEY, saveSecretSetting } from '@/hooks/useSecretSettings';
+import { readHttpError } from '@/hooks/usePoliAI';
 
 // ============================================================================
-// AI (Claude) - konfiguracja wspólnego proxy dla przyszłych funkcji AI.
-// Obieg interpelacji korzysta z Claude przez MCP i nie zużywa tego klucza API.
+// AI (Claude) - klucz i model dla PoliAI (/api/poliai). Operator instancji może je ustawić
+// w env (AI_API_KEY, AI_MODEL) - wtedy mają pierwszeństwo przed panelem.
 // ============================================================================
 
-export const DEFAULT_AI_MODEL = 'claude-sonnet-4-6';
+const DEFAULT_AI_MODEL = 'claude-sonnet-4-6';
 
-/** Blad z ai-proxy; `code` (np. AI_NOT_CONFIGURED, AI_NO_CREDITS) pozwala UI reagowac konkretnie. */
+/** Błąd z /api/poliai; `code` (np. AI_NOT_CONFIGURED, AI_NO_CREDITS) pozwala UI reagować konkretnie. */
 export class AiError extends Error {
   constructor(
     message: string,
@@ -22,8 +22,8 @@ export class AiError extends Error {
   }
 }
 
-const ProxyErrorBody = z.object({ error: z.string(), code: z.string().optional() });
-
+/** Klucz / model ustawione przez operatora w env - panel ich nie zmienia. */
+const OperatorManagedSchema = z.object({ key: z.boolean(), model: z.boolean() });
 
 const AiConnectionSchema = z.union([
   z.object({
@@ -31,51 +31,63 @@ const AiConnectionSchema = z.union([
     model: z.string(),
     model_available: z.boolean(),
     models: z.array(z.object({ id: z.string(), display_name: z.string() })),
+    operator_managed: OperatorManagedSchema,
   }),
-  z.object({ ok: z.literal(false), status: z.number(), code: z.string(), error: z.string() }),
+  // Brak klucza: code AI_NOT_CONFIGURED.
+  z.object({
+    ok: z.literal(false),
+    status: z.number(),
+    code: z.string(),
+    error: z.string(),
+    operator_managed: OperatorManagedSchema,
+  }),
 ]);
 export type AiConnection = z.infer<typeof AiConnectionSchema>;
 
+const SESSION_EXPIRED = 'Sesja wygasła. Zaloguj się ponownie.';
 
-async function callAiProxy<S extends z.ZodTypeAny>(
-  schema: S,
-  body: { action: string; payload?: unknown },
-): Promise<z.infer<S>> {
-  const { data, error } = await supabase.functions.invoke('ai-proxy', { body });
-  if (error) {
-    if (error instanceof FunctionsHttpError) {
-      const parsed = ProxyErrorBody.safeParse(await error.context.json().catch(() => null));
-      if (parsed.success) throw new AiError(parsed.data.error, parsed.data.code);
+/** `POST /api/poliai?op=connection`; po 401 odświeża sesję raz (jak `useBudgetReports`). */
+async function requestAiConnection(): Promise<AiConnection> {
+  let refreshed = false;
+  for (;;) {
+    const { data } = refreshed ? await supabase.auth.refreshSession() : await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) throw new AiError(SESSION_EXPIRED);
+    const res = await fetch('/api/poliai?op=connection', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.status === 401 && !refreshed) {
+      refreshed = true;
+      continue;
     }
-    throw new AiError(error.message || 'Błąd połączenia z usługą AI');
+    if (!res.ok) {
+      const { message, code } = await readHttpError(res);
+      throw new AiError(message, code);
+    }
+    const parsed = AiConnectionSchema.safeParse(await res.json().catch(() => null));
+    if (!parsed.success) throw new AiError('Niepoprawna odpowiedź usługi AI');
+    return parsed.data;
   }
-  const parsed = schema.safeParse(data);
-  if (!parsed.success) throw new AiError('Niepoprawna odpowiedź usługi AI');
-  return parsed.data;
 }
 
-// ============================================================================
-// Status / konfiguracja
-// ============================================================================
-
-
-/** Weryfikacja klucza w Anthropic + lista modeli (tylko Poseł). */
-export function useAiConnection(enabled = true) {
+/** Weryfikacja klucza w Anthropic + lista modeli (tylko Poseł i Administrator). */
+export function useAiConnection() {
   return useQuery<AiConnection>({
     queryKey: ['ai-connection'],
-    queryFn: () => callAiProxy(AiConnectionSchema, { action: 'check_connection' }),
-    enabled,
+    queryFn: requestAiConnection,
     staleTime: 60_000,
     retry: false,
   });
 }
 
-export interface AiSettings {
+interface AiSettings {
   model: string;
 }
 
-export interface AiSettingsUpdate {
-  model: string;
+interface AiSettingsUpdate {
+  /** undefined = bez zmian (model ustawia operator). */
+  model?: string;
   /** undefined = bez zmian; pusty string / null = usun klucz; inaczej nowy klucz. */
   api_key?: string | null;
 }
@@ -104,21 +116,21 @@ export function useUpdateAiSettings() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (settings: AiSettingsUpdate) => {
-      const { error } = await supabase
-        .from('app_settings')
-        .upsert(
-          { key: AI_MODEL_KEY, value: settings.model.trim() || DEFAULT_AI_MODEL },
-          { onConflict: 'key' },
-        );
-      if (error) throw error;
+      if (settings.model !== undefined) {
+        const { error } = await supabase
+          .from('app_settings')
+          .upsert(
+            { key: AI_MODEL_KEY, value: settings.model.trim() || DEFAULT_AI_MODEL },
+            { onConflict: 'key' },
+          );
+        if (error) throw error;
+      }
       if (settings.api_key !== undefined) await saveSecretSetting('anthropic_api_key', settings.api_key);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['ai-settings'] });
       qc.invalidateQueries({ queryKey: SECRET_SETTINGS_STATUS_KEY });
-      qc.invalidateQueries({ queryKey: ['ai-status'] });
       qc.invalidateQueries({ queryKey: ['ai-connection'] });
     },
   });
 }
-

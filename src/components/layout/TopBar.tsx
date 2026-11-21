@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePrivacy } from '@/contexts/PrivacyContext';
 import { isAdmin } from '@/lib/permissions';
 import { isStandalonePwa } from '@/lib/pwa';
+import { listRememberedProfiles } from '@/lib/trustedDevice';
 import { useRoleLabel } from '@/hooks/useMpForms';
 import { Button } from '@/components/ui/button';
 import {
@@ -85,8 +86,10 @@ export function TopBar() {
 
   const handleSignOut = async () => {
     await signOut();
-    // W zainstalowanej aplikacji nie pokazujemy publicznej strony głównej.
-    navigate(isStandalonePwa() ? '/login' : '/', { replace: true });
+    // W zainstalowanej aplikacji nie pokazujemy publicznej strony głównej; zapamiętane profile
+    // na tym komputerze -> od razu ekran wyboru profilu.
+    const toPicker = isStandalonePwa() || (await listRememberedProfiles()).length > 0;
+    navigate(toPicker ? '/login' : '/', { replace: true });
   };
 
   const handleEnablePrivacy = () => {

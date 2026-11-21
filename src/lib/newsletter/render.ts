@@ -168,6 +168,37 @@ const SPACER = `\n<tr><td style="height:8px; background-color:#DCDDE1;"></td></t
 
 const FONT_STACK = `'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif`;
 
+// Source Sans 3 (OFL, public/fonts/newsletter/OFL.txt) z originu instancji - bez zewnetrznych hostow
+// fontow. Plik zmienny (wght 200-900) w dwoch podzbiorach; latin-ext niesie polskie znaki.
+const FONT_PATH = '/fonts/newsletter';
+const FONT_FACES: ReadonlyArray<{ file: string; range: string }> = [
+  {
+    file: 'source-sans-3-latin-ext-wght-normal.woff2',
+    range:
+      'U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C4,U+2113,U+2C60-2C7F,U+A720-A7FF',
+  },
+  {
+    file: 'source-sans-3-latin-wght-normal.woff2',
+    range:
+      'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD',
+  },
+];
+
+/**
+ * `@font-face` szablonu. Mail (i podglad, ktory go odwzorowuje) potrzebuje absolutnego URL-a originu
+ * instancji - klient pocztowy nie zna bazy. Wersja online (/n/<slug>) jest serwowana z tego samego
+ * originu, wiec sciezka wzgledna przetrwa zmiane domeny instancji. `@media screen` ukrywa reguly
+ * przed Outlookiem (Word), ktory przy `@font-face` spada do Times New Roman zamiast FONT_STACK.
+ */
+function fontFaceCss(ctx: RenderCtx): string {
+  const base = ctx.web ? FONT_PATH : `${window.location.origin}${FONT_PATH}`;
+  const faces = FONT_FACES.map(
+    ({ file, range }) =>
+      `@font-face { font-family: 'Source Sans 3'; font-style: normal; font-weight: 200 900; font-display: swap; src: url('${base}/${file}') format('woff2'); unicode-range: ${range}; }`,
+  );
+  return `@media screen {\n      ${faces.join('\n      ')}\n    }`;
+}
+
 /** Jeden wrapper dla wszystkich blokow: komentarz + `<tr><td>` (+ data-section w podgladzie). */
 function wrapBlock(key: PreviewBlockKey, comment: string, inner: string, ctx: RenderCtx): string {
   const attr = ctx.preview ? ` data-section="${key}"` : '';
@@ -1070,8 +1101,8 @@ export function renderNewsletter(t: NewsletterTemplate, opts: RenderOptions): st
   <meta name="color-scheme" content="light only">
   <meta name="supported-color-schemes" content="light only">${ctx.web ? '\n  <meta name="robots" content="noindex, nofollow">' : ''}
   <title>${escapeHtml(t.subject)}</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600;700;800;900&amp;display=swap">
   <style type="text/css">
+    ${fontFaceCss(ctx)}
     body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
     table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
     img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }

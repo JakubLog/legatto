@@ -1,5 +1,5 @@
 // System prompt i narzedzia PoliAI. Narzedzia = rejestr MCP (te same role, zakresy danych i audyt).
-// Wstep i przyciski kolejnych krokow pisze szybki model (INTRO_MODEL) obok glownego.
+// Wstep i przyciski kolejnych krokow pisze szybki model (AiSettings.fastModel) obok glownego.
 
 import type { McpAuthContext, McpRole } from '../auth.js';
 import { listTools } from '../tools/index.js';
@@ -117,9 +117,6 @@ Pomagasz zespołowi biura: odpowiadasz na pytania o dane biura, podsumowujesz, p
 
   return { stable, context };
 }
-
-// Szybki model piszacy wstep, zanim glowny model zbierze dane i odpowie.
-export const INTRO_MODEL = 'claude-haiku-5-5';
 
 export const INTRO_SYSTEM = `Jesteś PoliAI, asystentem AI biura poselskiego. Twoje jedyne zadanie: napisać krótki, naturalny wstęp (1-2 zdania, maks. 30 słów) potwierdzający, że przyjmujesz polecenie użytkownika i co teraz sprawdzisz.
 Inny proces w tym czasie zbiera dane narzędziami (sprawy wyborców, kontakty, kalendarz, interpelacje, budżet, zespół, Puls Biura) i napisze właściwą odpowiedź.

@@ -1,12 +1,16 @@
-// Klient Anthropic Messages API dla PoliAI: streaming SSE na fetch (bez SDK, jak ai-proxy).
+// Klient Anthropic Messages API dla PoliAI: streaming SSE na fetch (bez SDK).
 // Skladamy pelna wiadomosc asystenta z delt i przekazujemy przyrosty do UI przez onEvent.
 
 import { z } from 'zod';
 import type { ApiBlock, ImageMediaType, ModelBlock, ModelMessage } from './conversation.js';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+const ANTHROPIC_MODELS_URL = 'https://api.anthropic.com/v1/models?limit=100';
 const ANTHROPIC_VERSION = '2023-06-01';
+// Domyslne modele, gdy nie ustawil ich operator (AI_MODEL, AI_FAST_MODEL) ani panel (ai_model).
 export const DEFAULT_MODEL = 'claude-sonnet-4-6';
+// Szybki model: wstep, przyciski kolejnych krokow, pamiec, kompresja kontekstu, OCR zalacznikow.
+export const DEFAULT_FAST_MODEL = 'claude-haiku-5-5';
 
 export interface AnthropicTool {
   name: string;
@@ -46,7 +50,7 @@ export class AnthropicApiError extends Error {
   }
 }
 
-/** Tlumaczy blad Anthropic API na komunikat dla uzytkownika (odpowiednik w ai-proxy). */
+/** Tlumaczy blad Anthropic API na komunikat dla uzytkownika + kod do obslugi w UI. */
 export function describeAnthropicError(status: number, rawMessage: string): AnthropicApiError {
   const message = rawMessage.toLowerCase();
   if (status === 401) return new AnthropicApiError(status, 'AI_KEY_INVALID', 'Klucz API Claude jest nieprawidłowy lub został usunięty.');
@@ -83,6 +87,27 @@ function errorMessageOf(body: string): string {
   } catch {
     return body;
   }
+}
+
+const ModelList = z.object({
+  data: z.array(z.object({ id: z.string(), display_name: z.string().optional() })),
+});
+
+export interface AnthropicModel {
+  id: string;
+  display_name: string;
+}
+
+/** GET /v1/models - weryfikuje klucz i zwraca modele dostepne dla niego. Blad = AnthropicApiError. */
+export async function listModels(apiKey: string, signal: AbortSignal): Promise<AnthropicModel[]> {
+  const res = await fetch(ANTHROPIC_MODELS_URL, {
+    signal,
+    headers: { 'x-api-key': apiKey, 'anthropic-version': ANTHROPIC_VERSION },
+  });
+  const body: unknown = await res.json().catch(() => null);
+  if (!res.ok) throw describeAnthropicError(res.status, errorMessageOf(JSON.stringify(body)));
+  const list = ModelList.safeParse(body);
+  return list.success ? list.data.data.map((m) => ({ id: m.id, display_name: m.display_name ?? m.id })) : [];
 }
 
 interface DraftBlock {

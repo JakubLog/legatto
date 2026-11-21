@@ -44,7 +44,14 @@
     {
       "source": "/(n/.*|api/newsletter-view)",
       "headers": [
-        { "key": "Content-Security-Policy", "value": "sandbox; default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https: data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" }
+        { "key": "Content-Security-Policy", "value": "sandbox; default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; font-src https: data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" }
+      ]
+    },
+    {
+      "source": "/fonts/newsletter/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Cross-Origin-Resource-Policy", "value": "cross-origin" }
       ]
     }
   ],

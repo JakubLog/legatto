@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FileCheck2, FileText, Layers, MessageSquareText, Plug, Send, type LucideIcon } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { FileCheck2, FileText, Layers, MessageSquareText, Plug, Plus, Send, type LucideIcon } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { SearchSelect } from '@/components/ui/search-select';
 import { Page, PageHeader } from '@/components/layout/Page';
@@ -9,6 +9,7 @@ import { MonthNav } from '@/components/events/CalendarToolbar';
 import { useAuth } from '@/contexts/AuthContext';
 import { canWrite, isAdmin } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
+import { INSTANCE } from '@/lib/instance';
 import {
   INTERPELLATION_LAYOUTS,
   INTERPELLATION_STATUSES,
@@ -20,6 +21,7 @@ import {
   type InterpellationsLayout,
 } from '@/lib/interpellations';
 import { DeleteInterpellationDialog } from '@/components/interpellations/DeleteInterpellationDialog';
+import { InterpellationUploadDialog } from '@/components/interpellations/InterpellationUploadDialog';
 import { InterpellationsBoard } from '@/components/interpellations/InterpellationsBoard';
 import { InterpellationsCalendar } from '@/components/interpellations/InterpellationsCalendar';
 import { InterpellationsList } from '@/components/interpellations/InterpellationsList';
@@ -71,6 +73,10 @@ export default function Interpelacje() {
   const { profile } = useAuth();
   const writer = canWrite(profile?.role);
   const admin = isAdmin(profile?.role);
+  // Interpelacje wgrywa Pracownik (ręcznie albo przez Claude/MCP) - jak role narzędzi MCP.
+  const uploader = profile?.role === 'pracownik';
+  const navigate = useNavigate();
+  const [uploadOpen, setUploadOpen] = useState(false);
   const { data: items = [], isLoading } = useInterpellations();
   const { data: metrics, isLoading: metricsLoading } = useInterpellationMetrics();
   const [layout, setLayout] = useState<InterpellationsLayout>(readLayoutPreference);
@@ -193,19 +199,31 @@ export default function Interpelacje() {
       </div>
       <p className="max-w-md text-sm text-muted-foreground">
         {items.length === 0
-          ? 'Brak interpelacji. Pracownik wgrywa gotową treść przez Claude połączone z portalem biura przez MCP.'
+          ? INSTANCE.ai
+            ? 'Brak interpelacji. Pracownik dodaje je w portalu albo wgrywa przez Claude połączone z portalem biura przez MCP.'
+            : 'Brak interpelacji. Pracownik dodaje je przyciskiem „Dodaj interpelację”.'
           : statusFilter === 'active' && activeRecipient === null
             ? 'Brak interpelacji w toku.'
             : 'Brak interpelacji w wybranym widoku.'}
       </p>
-      {items.length === 0 && writer ? (
-        // Integracje MCP są tylko na desktopie - na telefonie bez odnośnika.
-        <Button size="sm" className="max-md:hidden" asChild>
-          <Link to="/biuro/admin/integracje/mcp">
-            <Plug />
-            Podłącz Claude przez MCP
-          </Link>
-        </Button>
+      {items.length === 0 && (uploader || (writer && INSTANCE.ai)) ? (
+        <div className="flex flex-wrap justify-center gap-2">
+          {uploader && (
+            <Button size="sm" onClick={() => setUploadOpen(true)}>
+              <Plus />
+              Dodaj interpelację
+            </Button>
+          )}
+          {writer && INSTANCE.ai && (
+            // Integracje MCP są tylko na desktopie - na telefonie bez odnośnika.
+            <Button size="sm" variant="outline" className="max-md:hidden" asChild>
+              <Link to="/biuro/admin/integracje/mcp">
+                <Plug />
+                Podłącz Claude przez MCP
+              </Link>
+            </Button>
+          )}
+        </div>
       ) : items.length > 0 && filteredOut ? (
         <Button variant="outline" size="sm" onClick={showAll}>
           Pokaż wszystkie
@@ -222,11 +240,19 @@ export default function Interpelacje() {
         // Opis obiegu tylko przy szerokim obszarze modułu; na telefonie zabierałby trzy linie nad listą.
         description={
           <span className="@max-md:hidden">
-            Pracownik wgrywa gotową interpelację przez Claude (MCP). {mp.nominative} akceptuje ją, zgłasza uwagi albo odrzuca;
-            zaakceptowana czeka na wysłanie.
+            {INSTANCE.ai ? 'Pracownik dodaje interpelację w portalu albo wgrywa ją przez Claude (MCP).' : 'Pracownik dodaje interpelację w portalu.'}{' '}
+            {mp.nominative} akceptuje ją, zgłasza uwagi albo odrzuca; zaakceptowana czeka na wysłanie.
           </span>
         }
         titleAddon={<ModuleOwners module="interpelacje" />}
+        actions={
+          uploader && (
+            <Button onClick={() => setUploadOpen(true)}>
+              <Plus />
+              <span className="@max-sm:hidden">Dodaj interpelację</span>
+            </Button>
+          )
+        }
         toolbar={
           <>
             <InterpellationViewTabs value={layout} onChange={setLayout} />
@@ -397,6 +423,11 @@ export default function Interpelacje() {
 
       <MarkSentDialog item={markingSent} onClose={() => setMarkingSent(null)} />
       <DeleteInterpellationDialog item={deleting} onClose={() => setDeleting(null)} />
+      <InterpellationUploadDialog
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        onSaved={(id) => navigate(`/biuro/interpelacje/${id}`)}
+      />
     </Page>
   );
 }

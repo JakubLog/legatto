@@ -21,6 +21,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { AppRole } from '@/integrations/supabase/types';
+import { INSTANCE } from '@/lib/instance';
 import { isAdmin } from '@/lib/permissions';
 
 export interface NavItem {
@@ -61,7 +62,8 @@ export const INTEGRATIONS_NAV_ITEM: NavItem = {
   to: '/biuro/admin/integracje',
   label: 'Integracje',
   Icon: Plug,
-  keywords: ['mcp', 'claude', 'getresponse', 'ics', 'ai'],
+  // Słowa AI/MCP tylko z włączonym AI - inaczej wyszukiwarka prowadziłaby do nieistniejących kafelków.
+  keywords: INSTANCE.ai ? ['mcp', 'claude', 'getresponse', 'ics', 'ai'] : ['getresponse', 'ics'],
 };
 
 /** Kosz: dla każdej roli (Poseł/administrator widzą wszystkie pozycje, pozostali swoje usunięcia). */

@@ -40,7 +40,7 @@
 - signOut()
 - Wyczyść dane klienta: cache React Query (`queryClient.clear()`), "Ostatnie" wyszukiwarki (`clearRecent()`) - także przy zmianie usera w tej samej karcie (`AuthContext`) - i szkice newslettera (`clearNewsletterDrafts()`, tylko przy jawnym wylogowaniu)
 - Zdejmij blokadę trybu prywatnego (`setPrivacyLocked(userId, false)`)
-- Redirect na `/`
+- Redirect na `/` (PWA albo zapamiętane profile na tym komputerze: `/login` z ekranem wyboru profilu - #31)
 
 ---
 
@@ -82,7 +82,8 @@ if (!parsed.success) return new Response('Invalid input', { status: 400 })
 
 ### #13 import.meta.env
 - Vite używa `import.meta.env.VITE_*` (NIE process.env)
-- Brak type-safe env validation (TODO: dodac)
+- Flagi instancji (`INSTANCE_AI`, `INSTANCE_EMAIL`) w UI tylko przez `INSTANCE` z `src/lib/instance.ts` (build-time z parsera `api/_lib/instance.ts`); w `api/` przez `instanceFlags()` / `rejectIfAiDisabled()` - serwer egzekwuje zawsze, UI tylko ukrywa. Nowe flagi: fail-closed (brak = `off`), jeden parser, bez osobnej zmiennej `VITE_*`.
+- `api/`: klient Supabase tylko przez `getServiceClient()` / `getAnonClient()` (`api/_lib/supabase.ts`) - brak `SUPABASE_URL` / kluczy = błąd, nie pusty string. Pełnej walidacji env na starcie nadal brak.
 
 ---
 
@@ -184,6 +185,11 @@ if (!parsed.success) return new Response('Invalid input', { status: 400 })
 
 ### #30 Hasła i Auth (prod)
 - `password_min_length=12` + wymagane małe/duże litery, cyfry i znaki specjalne (Management API i `config.toml`); `disable_signup=true`. HIBP i `sessions_timebox` wymagają planu Pro - niewłączone.
+
+### #31 Zaufane komputery (migracja `20261116100000_trusted_devices.sql`)
+- Logowanie bez hasła wyłącznie jako: klucz ECDSA P-256 zaufanej przeglądarki (nieeksportowalny, IndexedDB) + PIN trybu prywatnego (`privacy_pin_attempt`, ta sama blokada) → sesja **aal1** → kod TOTP. PIN ani klucz nigdy nie zastępują 2FA; przeglądarka nie przechowuje tokenów sesji poza sesją Supabase.
+- Klucz rejestruje tylko sesja aal2 (`register_trusted_device`), ważność 30 dni od ostatniego logowania hasłem; wyzwanie jednorazowe (`service_trusted_device_consume`), podpis obejmuje operację.
+- `device-login` odmawia kontu nieaktywnemu, bez `password_set` (po "Wyloguj wszędzie"/resecie 2FA) i bez zweryfikowanego TOTP; `revoke_user_access` usuwa klucze. Nowy kanał logowania = linia w `revoke_user_access` (#27).
 
 ---
 

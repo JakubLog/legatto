@@ -35,6 +35,21 @@ Sekrety użytkownika (migracja `20261018210000_security_profiles_storage.sql`). 
 | pin_failed_attempts | integer NOT NULL | default 0. Licznik błędnych prób (zerowany po sukcesie i po nałożeniu blokady) |
 | pin_locked_until | timestamptz NULL | blokada po 5 błędnych próbach (15 min) |
 
+### trusted_devices
+Zaufane przeglądarki do logowania PIN-em + 2FA z ekranu wyboru profilu (migracja `20261116100000_trusted_devices.sql`). RLS bez polityk, brak grantów dla `anon`/`authenticated`; odwołanie = DELETE.
+
+| Kolumna | Typ | Notes |
+|---------|-----|-------|
+| id | uuid PK | |
+| user_id | uuid NOT NULL | FK → profiles(id) ON DELETE CASCADE |
+| public_key | jsonb NOT NULL | JWK `{kty: EC, crv: P-256, x, y}` (bez `d`); klucz prywatny tylko w przeglądarce, nieeksportowalny |
+| label | text NOT NULL | np. „Chrome · macOS” (1-120 znaków) |
+| created_at / expires_at | timestamptz | `expires_at` = rejestracja + 30 dni |
+| last_used_at | timestamptz NULL | ostatnie logowanie PIN-em |
+| challenge / challenge_expires_at | text / timestamptz NULL | jednorazowe wyzwanie (64 hex, 60 s), zerowane przy każdej próbie |
+
+RPC: `register_trusted_device(p_public_key, p_label, p_replaces)` → `{id, expires_at}` (aktywne + aal2; max 10 na konto, najstarsze wypadają; audit `trusted_device.register`), `list_my_trusted_devices()` (aktywne + aal2, bez klucza), `revoke_trusted_device(p_id)` → boolean (audit `trusted_device.revoke`); service_role: `service_trusted_device_challenge(p_device_id)`, `service_trusted_device_consume(p_device_id)`. `revoke_user_access` usuwa urządzenia (klucz wyniku `trusted_devices`). pg_cron `trusted-devices-retention` kasuje wygasłe.
+
 ### offices
 Biura poselskie. Pracownicy i Asystenci są do nich przypisani; Poseł opcjonalnie.
 
@@ -418,7 +433,7 @@ Migracje `20261018200000_security_audit_settings_oauth.sql` + `20261018210000_se
 
 ### app_settings - sekrety
 - Od migracji `20261110170000_secrets_vault.sql` klucze `anthropic_api_key`, `getresponse_api_key`, `resend_api_key` są zaszyfrowane w Supabase Vault (`vault.secrets`, nazwy `app_settings:<klucz>`), a prywatny klucz VAPID jako `notifications:vapid_private_key` (kolumna `notification_server_config.vapid_private_key` usunięta). Migracja przeniosła istniejące wartości i usunęła je z `app_settings`; CHECK `app_settings_no_plaintext_secrets` blokuje te klucze w `app_settings` dla każdej roli (także service_role). Restrykcyjna polityka `app_settings_no_secret_keys` zostaje (Poseł + aal2 SELECT/INSERT/UPDATE pozostałych kluczy, writer + aal2 SELECT `newsletter_defaults`, brak DELETE).
-- Zapis: RPC `set_secret_setting`, status bez wartości: `get_secret_settings_status` (FE: `src/hooks/useSecretSettings.ts`). Odczyt wartości tylko service_role przez `service_get_secrets` (PoliAI `api/_lib/poliai/session.ts`, powiadomienia `api/_lib/notifications/settings.ts`, MCP `briefing.ts` i maska w `settings_list`, Edge Functions `ai-proxy` i `getresponse-proxy`). `authenticated`/`anon` nie mają dostępu do schematu `vault`.
+- Zapis: RPC `set_secret_setting`, status bez wartości: `get_secret_settings_status` (FE: `src/hooks/useSecretSettings.ts`). Odczyt wartości tylko service_role przez `service_get_secrets` (PoliAI `api/_lib/poliai/session.ts` - pomijany, gdy operator ustawi `AI_API_KEY`; powiadomienia `api/_lib/notifications/settings.ts`, MCP `briefing.ts` i maska w `settings_list`, Edge Function `getresponse-proxy`). `authenticated`/`anon` nie mają dostępu do schematu `vault`.
 - Vault szyfruje kluczem projektu Supabase (poza bazą): zrzut odtworzony w innym projekcie nie odszyfruje sekretów - klucze API wpisać ponownie w Integracjach, VAPID wygeneruje się od nowa (ponowna subskrypcja urządzeń push).
 - Audyt zapisów sekretów robi `set_secret_setting` (`setting.*`, `redacted: true`, `configured`, `changed`); `app_settings_audit_trigger` nadal maskuje te klucze. Historyczne wpisy `setting.*` z kluczami w metadata wyczyszczone (2026-10-18). `notification_server_config.dispatch_token` zostaje jawny (czyta go trigger `pg_net` w bazie).
 

@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { PasswordSetupScreen } from './PasswordSetupScreen';
 import { MfaEnrollmentScreen } from './MfaEnrollmentScreen';
 import { MfaChallengeScreen } from './MfaChallengeScreen';
+import { RememberThisDevice } from '@/components/auth/RememberThisDevice';
 
 export function ProtectedRoute() {
   const { session, profile, loading, mfa, passwordRecovery } = useAuth();
@@ -45,5 +46,10 @@ export function ProtectedRoute() {
     return <MfaChallengeScreen />;
   }
 
-  return <Outlet />;
+  return (
+    <>
+      <RememberThisDevice />
+      <Outlet />
+    </>
+  );
 }

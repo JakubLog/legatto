@@ -27,7 +27,7 @@ interface Props {
   error: Error | null;
   /** Akcja pustego stanu (tylko gdy użytkownik może tworzyć kampanie). */
   onCreate?: () => void;
-  /** Wydania z ePosła po id newslettera GR - wersja online i duplikowanie. */
+  /** Wydania wysłane z aplikacji po id newslettera GR - wersja online i duplikowanie. */
   issuesByGrId?: Record<string, NewsletterIssueSummary>;
   onDuplicate?: (issue: NewsletterIssueSummary) => void;
   duplicatingId?: string | null;

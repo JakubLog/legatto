@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 // Kontrola istniejącej instancji (jedna instancja = jeden poseł, ADR 026). TYLKO ODCZYT: wyłącznie żądania GET.
 //
-//   [SUPABASE_ACCESS_TOKEN=sbp_...] [SUPABASE_ANON_KEY=...] node scripts/instances/doctor.mjs <domena> <ref>
+//   [SUPABASE_ACCESS_TOKEN=sbp_...] [SUPABASE_ANON_KEY=...] node scripts/instances/doctor.mjs <domena> <ref> [--ai=on|off]
 //
 // Bez tokenu Management API pomija kontrole konfiguracji projektu (Auth, sekrety, funkcje, kopie, SSL, migracje).
 // Klucz anon: SUPABASE_ANON_KEY, inaczej z bundla strony, inaczej z Management API. Kod wyjścia 1 przy każdym FAIL.
+// --ai: oczekiwany INSTANCE_AI wdrożenia (domyślnie INSTANCE_AI ze środowiska; brak = WARN i pominięcie bramki AI).
+// INSTANCE_EMAIL nie jest sprawdzany z zewnątrz (stan widać w panelu: Integracje → Powiadomienia).
 // Uruchamiaj po każdym wdrożeniu i po provisioningu (scripts/instances/provision.mjs).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,17 +18,30 @@ import {
   PASSWORD_REQUIRED_CHARACTERS,
   REPO_ROOT,
   REQUIRED_EDGE_SECRETS,
+  RETIRED_EDGE_FUNCTIONS,
   edgeFunctionSlugs,
+  isEuRegion,
   managementToken,
   migrationVersions,
   parseDomain,
   parseRef,
 } from './policy.mjs';
 
-const positional = process.argv.slice(2).filter((a) => !a.startsWith('--'));
-if (positional.length !== 2) {
-  console.log('Użycie: [SUPABASE_ACCESS_TOKEN=...] node scripts/instances/doctor.mjs <domena> <ref>');
-  process.exit(2);
+const args = process.argv.slice(2);
+const positional = args.filter((a) => !a.startsWith('--'));
+if (args.includes('--help') || positional.length !== 2) {
+  console.log('Użycie: [SUPABASE_ACCESS_TOKEN=...] [INSTANCE_AI=on|off] node scripts/instances/doctor.mjs <domena> <ref> [--ai=on|off]');
+  process.exit(args.includes('--help') ? 0 : 2);
+}
+const aiArg = args.find((a) => a.startsWith('--ai='))?.slice('--ai='.length) ?? process.env.INSTANCE_AI;
+let aiExpected = null; // null = nie podano, bramka AI niesprawdzana
+if (aiArg !== undefined) {
+  const value = aiArg.trim().toLowerCase();
+  if (value !== 'on' && value !== 'off') {
+    console.error(`--ai / INSTANCE_AI: oczekiwano "on" albo "off", jest ${JSON.stringify(aiArg)}`);
+    process.exit(2);
+  }
+  aiExpected = value === 'on';
 }
 const domain = parseDomain(positional[0]);
 const ref = parseRef(positional[1]);
@@ -135,17 +150,48 @@ else {
 anonKey ??= bundleAnon;
 
 // ---------------------------------------------------------------------------------------------
-// Vercel: OAuth discovery, cron bez sekretu, region funkcji
+// Vercel: bramka AI (MCP, OAuth, PoliAI), OAuth discovery, cron bez sekretu, region funkcji
 // ---------------------------------------------------------------------------------------------
-const discovery = await getJson(`${origin}/.well-known/oauth-authorization-server`);
-check(
-  discovery.body?.issuer === origin,
-  'OAuth',
-  `issuer = ${origin}`,
-  `issuer = ${discovery.body?.issuer ?? `(HTTP ${discovery.status})`} - ustaw OAUTH_ISSUER=${origin}`,
-);
-const cron = await get(`${origin}/api/cron/sync-ics`);
-check(cron.status === 401, 'cron', '/api/cron/sync-ics bez sekretu → 401', `/api/cron/sync-ics bez sekretu → ${cron.status}`);
+// Same GET: przy INSTANCE_AI=off każdy z handlerów odpowiada 404 AI_DISABLED przed autoryzacją.
+const AI_PATHS = [
+  '/api/mcp',
+  '/api/poliai',
+  '/.well-known/oauth-authorization-server',
+  '/api/oauth/authorize',
+  '/api/oauth/token',
+  '/api/oauth/code',
+];
+const aiProbes = await Promise.all(AI_PATHS.map(async (p) => ({ path: p, ...(await getJson(`${origin}${p}`)) })));
+const aiDisabled = (probe) => probe.status === 404 && probe.body?.code === 'AI_DISABLED';
+if (aiExpected === null) {
+  report('WARN', 'AI', 'brak --ai=on|off i INSTANCE_AI - pominięto kontrolę bramki AI');
+} else {
+  const wrong = aiProbes.filter((probe) => (aiExpected ? probe.status === 404 : !aiDisabled(probe)));
+  const describe = (probe) => `${probe.path} → ${probe.status}${probe.body?.code ? ` ${probe.body.code}` : ''}`;
+  check(
+    wrong.length === 0,
+    'AI',
+    aiExpected ? `AI włączone: ${aiProbes.map(describe).join(', ')}` : `AI wyłączone: ${AI_PATHS.length} tras → 404 AI_DISABLED`,
+    aiExpected
+      ? `oczekiwano AI włączonego, a ${wrong.map(describe).join(', ')} (INSTANCE_AI=on w Vercelu i ponowne wdrożenie)`
+      : `oczekiwano 404 AI_DISABLED, a ${wrong.map(describe).join(', ')} (INSTANCE_AI=off w Vercelu i ponowne wdrożenie)`,
+  );
+}
+const discovery = aiProbes.find((probe) => probe.path === '/.well-known/oauth-authorization-server');
+if (aiDisabled(discovery)) {
+  report('SKIP', 'OAuth', 'AI wyłączone - OAuth dla Claude nieaktywny, issuer niesprawdzany');
+} else {
+  check(
+    discovery.body?.issuer === origin,
+    'OAuth',
+    `issuer = ${origin}`,
+    `issuer = ${discovery.body?.issuer ?? `(HTTP ${discovery.status})`} - ustaw OAUTH_ISSUER=${origin}`,
+  );
+}
+const cron = await getJson(`${origin}/api/cron/sync-ics`);
+if (cron.status === 401) report('OK', 'cron', '/api/cron/sync-ics bez sekretu → 401');
+else if (cron.status === 503) report('FAIL', 'cron', '/api/cron/sync-ics → 503: CRON_SECRET nieustawiony w Vercelu - żaden cron nie działa');
+else report('FAIL', 'cron', `/api/cron/sync-ics bez sekretu → ${cron.status}, oczekiwano 401`);
 const fnRegion = cron.headers.get('x-vercel-id')?.split('::');
 if (fnRegion && fnRegion.length >= 3) {
   check(fnRegion[1] === 'dub1', 'Vercel', 'funkcje api/ w dub1', `funkcje api/ w ${fnRegion[1]} (vercel.json: "regions": ["dub1"])`, 'WARN');
@@ -218,7 +264,7 @@ if (!token) {
 } else {
   const project = await management(`/v1/projects/${ref}`);
   if (project.status !== 200) report('FAIL', 'projekt', `GET /v1/projects/${ref} → ${project.status}`);
-  else check(String(project.body.region).startsWith('eu-'), 'projekt', `region ${project.body.region}`, `region ${project.body.region} poza UE`, 'WARN');
+  else check(isEuRegion(project.body.region), 'projekt', `region ${project.body.region}`, `region ${project.body.region} poza UE - przenieś instancję do projektu w regionie eu-*`);
 
   const auth = (await management(`/v1/projects/${ref}/config/auth`)).body ?? {};
   const allowList = String(auth.uri_allow_list ?? '').split(',').map((u) => u.trim()).filter(Boolean);
@@ -242,7 +288,16 @@ if (!token) {
   check(templateHosts.length === 0, 'Auth config', 'szablon zaproszenia bez obcych domen', `szablon zaproszenia linkuje do: ${templateHosts.join(', ')}`, 'WARN');
   check(auth.password_hibp_enabled === true, 'Auth config', 'HIBP włączone', 'HIBP wyłączone (plan Pro)', 'WARN');
   check(auth.sessions_timebox > 0 && auth.sessions_inactivity_timeout > 0, 'Auth config', 'limity sesji ustawione', 'sesje bez limitu czasu/bezczynności (plan Pro)', 'WARN');
-  check(Boolean(auth.smtp_host), 'Auth config', `SMTP ${auth.smtp_host}`, 'SMTP nieustawiony - zaproszenia dochodzą tylko do członków zespołu projektu', 'WARN');
+  const smtpMissing = ['smtp_host', 'smtp_port', 'smtp_user', 'smtp_admin_email'].filter((k) => !auth[k]);
+  check(
+    smtpMissing.length === 0,
+    'Auth config',
+    `SMTP ${auth.smtp_host}:${auth.smtp_port}, nadawca ${auth.smtp_sender_name ? `"${auth.smtp_sender_name}" ` : ''}<${auth.smtp_admin_email}>`,
+    auth.smtp_host
+      ? `SMTP niekompletny: brak ${smtpMissing.join(', ')} (provision.mjs z AUTH_SMTP_*)`
+      : 'SMTP nieustawiony - zaproszenia dochodzą tylko do członków zespołu projektu (provision.mjs z AUTH_SMTP_PASS)',
+    'WARN',
+  );
   check(auth.security_captcha_enabled === true, 'Auth config', 'CAPTCHA na Auth', 'brak CAPTCHA na /auth/v1/* (wymaga captchaToken we froncie)', 'WARN');
 
   const secrets = await management(`/v1/projects/${ref}/secrets`);
@@ -257,7 +312,11 @@ if (!token) {
     else check(fn.verify_jwt === true, 'Edge Functions', `${slug} verify_jwt`, `${slug} bez verify_jwt`);
     deployed.delete(slug);
   }
-  for (const slug of deployed.keys()) report('WARN', 'Edge Functions', `${slug} wdrożona, ale nie ma jej w repo`);
+  for (const slug of deployed.keys()) {
+    if (RETIRED_EDGE_FUNCTIONS.includes(slug)) {
+      report('FAIL', 'Edge Functions', `${slug} nadal wdrożona, choć usunięta z repo - supabase functions delete ${slug} --project-ref ${ref}`);
+    } else report('WARN', 'Edge Functions', `${slug} wdrożona, ale nie ma jej w repo`);
+  }
 
   const backups = (await management(`/v1/projects/${ref}/database/backups`)).body ?? {};
   check(

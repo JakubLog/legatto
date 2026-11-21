@@ -1,4 +1,6 @@
 // /api/notifications - powiadomienia e-mail (Resend) i web push (PWA).
+// E-mail tylko przy INSTANCE_EMAIL=on (operator instancji); przy off email_enabled jest zapisywane,
+// ale pomijane - kolejka oznacza e-mail jako skipped, push działa bez zmian.
 //
 // Sesja Supabase (aal2, aktywne konto) w nagłówku Authorization:
 //   GET  ?op=status         dostępność kanałów w instancji + publiczny klucz VAPID (każda rola)
@@ -14,12 +16,12 @@
 
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { isPoselRole, loadAuthProfile, parseBearer } from './_lib/auth.js';
 import { resolveIssuer } from './_lib/issuer.js';
 import { isAal2Session } from './_lib/jwt.js';
-import { getServiceClient } from './_lib/supabase.js';
+import { getAnonClient, getServiceClient } from './_lib/supabase.js';
+import { instanceFlags } from './_lib/instance.js';
 import { deliver, dispatchPending, finalize, loadDispatchContext, OutboxRow } from './_lib/notifications/dispatch.js';
 import { countPushDevices } from './_lib/notifications/push.js';
 import { checkKey } from './_lib/notifications/resend.js';
@@ -54,18 +56,10 @@ interface SessionUser {
   email: string | null;
 }
 
-function supabaseUrl(): string {
-  return process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? '';
-}
-
-function anonKey(): string {
-  return process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY ?? '';
-}
-
 async function authenticateUser(req: VercelRequest): Promise<SessionUser> {
   const token = parseBearer(req.headers.authorization);
   if (!token) throw new ApiError(401, 'brak_sesji', 'Brak sesji');
-  const { data, error } = await createClient(supabaseUrl(), anonKey(), { auth: { persistSession: false } }).auth.getUser(token);
+  const { data, error } = await getAnonClient().auth.getUser(token);
   if (error || !data.user) throw new ApiError(401, 'brak_sesji', 'Nieprawidłowa lub wygasła sesja');
   if (!isAal2Session(token, data.user)) throw new ApiError(403, 'wymagane_2fa', 'Wymagana weryfikacja dwuetapowa (2FA)');
   const profile = await loadAuthProfile(data.user.id);
@@ -105,6 +99,7 @@ async function handleTest(user: SessionUser, body: unknown) {
   const { channel } = parsed.data;
   const ctx = await loadDispatchContext();
   if (channel === 'email') {
+    if (!instanceFlags().email) throw new ApiError(409, 'email_wylaczony', 'Wysyłka e-mail jest wyłączona przez operatora instancji.');
     if (!ctx.emailAvailable) throw new ApiError(409, 'nieskonfigurowane', 'Wysyłka e-mail nie jest skonfigurowana w biurze.');
     if (!user.email) throw new ApiError(422, 'brak_adresu', 'Twój profil nie ma adresu e-mail.');
   } else {
@@ -159,9 +154,11 @@ const AdminOverview = z.object({
 
 async function handleAdminStatus(user: SessionUser) {
   requireAdmin(user);
+  // INSTANCE_EMAIL=off: bez odczytu klucza i bez weryfikacji w Resend (panel e-mail jest ukryty).
+  const emailOn = instanceFlags().email;
   const [settings, key, overviewRes] = await Promise.all([
     loadSettings(),
-    loadResendKey(),
+    emailOn ? loadResendKey() : Promise.resolve(''),
     getServiceClient().rpc('notifications_admin_overview'),
   ]);
   if (overviewRes.error) throw new Error(`notifications_admin_overview: ${overviewRes.error.message}`);
@@ -188,10 +185,7 @@ async function handleAdminSave(req: VercelRequest, user: SessionUser) {
     throw err;
   }
   // Zapis klientem z sesją użytkownika: RLS (Poseł/administrator + aal2) i audyt setting.update z aktorem.
-  const asUser = createClient(supabaseUrl(), anonKey(), {
-    auth: { persistSession: false },
-    global: { headers: { Authorization: `Bearer ${user.token}` } },
-  });
+  const asUser = getAnonClient(user.token);
   const { error } = await asUser
     .from('app_settings')
     .upsert({ key: SETTINGS_KEY, value: next, updated_by: user.id, updated_at: new Date().toISOString() });

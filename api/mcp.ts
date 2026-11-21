@@ -17,6 +17,8 @@
 //   - prompts/get            - tresc konkretnego promptu (api/_lib/prompts.ts)
 //
 // Uwaga: streaming/SSE celowo pominiety - jeden POST = jeden JSON response.
+//
+// INSTANCE_AI != on: kazde zadanie poza preflightem CORS = 404 AI_DISABLED (przed tokenem i baza).
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
@@ -37,6 +39,7 @@ import { logAudit } from './_lib/audit.js';
 import { callTool, getTool, listTools } from './_lib/tools/index.js';
 import { findPrompt, listPrompts, parsePromptArgs, PromptArgumentError, renderPrompt } from './_lib/prompts.js';
 import { IssuerError, resolveIssuer } from './_lib/issuer.js';
+import { rejectIfAiDisabled } from './_lib/instance.js';
 import { getSiteIdentity, mpForms, officeFullName } from './_lib/siteIdentity.js';
 
 const MCP_PROTOCOL_VERSION = '2024-11-05';
@@ -211,6 +214,10 @@ async function handlerInner(req: VercelRequest, res: VercelResponse) {
     res.status(204).end();
     return;
   }
+
+  // Preflight wyzej przechodzi, zeby przegladarka mogla odczytac 404 (naglowki CORS).
+  applyCors(res);
+  if (rejectIfAiDisabled(res)) return;
 
   if (req.method === 'GET') {
     const info = await serverInfo(req);

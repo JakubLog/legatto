@@ -20,9 +20,10 @@ export type DataScope = 'own' | 'all';
 // Moduly z per-userowym zakresem danych (profiles.scope_*), egzekwowanym w RLS.
 export type ScopedModule = 'cases' | 'contacts' | 'events' | 'interpellations';
 
-// Kanal wywolania narzedzi: zewnetrzny klient MCP (token epm_) albo PoliAI w aplikacji
-// (sesja Supabase). Trafia do audytu (metadata.token_id / metadata.via).
-export type ToolChannel = 'mcp' | 'poliai';
+// Kanal wywolania narzedzi: zewnetrzny klient MCP (token epm_), PoliAI w aplikacji (sesja Supabase)
+// albo operacja portalu bez AI (sesja Supabase, np. reczne dodanie interpelacji w api/integracje.ts).
+// Trafia do audytu (metadata.token_id / metadata.via).
+export type ToolChannel = 'mcp' | 'poliai' | 'portal';
 
 export interface McpAuthContext {
   channel: ToolChannel;

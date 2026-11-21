@@ -18,7 +18,7 @@ export interface ToolDefinition {
   inputSchema: Record<string, unknown>;
   // Brak = kazda rola z dostepem do MCP (Posel, Administrator i Pracownik).
   roles?: readonly McpRole[];
-  // Kanaly, w ktorych narzedzie istnieje. Brak = wszystkie ('mcp' i 'poliai').
+  // Kanaly, w ktorych narzedzie istnieje. Brak = 'mcp' i 'poliai' (kanal 'portal' nie widzi zadnego narzedzia).
   channels?: readonly ToolChannel[];
   // true = narzedzie tylko czyta dane. PoliAI wykonuje je bez pytania; pozostale
   // (brak flagi) wymagaja zatwierdzenia przez uzytkownika w panelu.

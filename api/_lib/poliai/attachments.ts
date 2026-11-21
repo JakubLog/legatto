@@ -26,7 +26,6 @@ import {
   type ResolvedAttachments,
   type ResolvedPage,
 } from './conversation.js';
-import { INTRO_MODEL } from './prompt.js';
 import { enforceDailyLimit, HttpError, type AiSettings } from './session.js';
 
 const BUCKET = 'poliai-attachments';
@@ -189,7 +188,7 @@ async function ocrPage(settings: AiSettings, path: string): Promise<string> {
   }
   const text = await ocrImage({
     apiKey: settings.apiKey,
-    model: INTRO_MODEL,
+    model: settings.fastModel,
     system: OCR_SYSTEM,
     image,
     maxTokens: OCR_MAX_TOKENS,

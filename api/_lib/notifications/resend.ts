@@ -1,6 +1,8 @@
 // Klient Resend (REST, bez SDK). RESEND_API_URL nadpisuje adres (testy z atrapą).
+// Każde zapytanie do Resend idzie przez `call` - tam bramka INSTANCE_EMAIL (operator instancji).
 
 import { z } from 'zod';
+import { instanceFlags } from '../instance.js';
 
 const DEFAULT_API = 'https://api.resend.com';
 const TIMEOUT_MS = 10_000;
@@ -35,6 +37,9 @@ const DomainsResponse = z
   .loose();
 
 async function call(key: string, method: 'GET' | 'POST', path: string, body?: unknown, idempotencyKey?: string): Promise<unknown> {
+  if (!instanceFlags().email) {
+    throw new ResendError(409, 'email_disabled', 'Wysyłka e-mail jest wyłączona przez operatora instancji.');
+  }
   let res: Response;
   let text: string;
   try {

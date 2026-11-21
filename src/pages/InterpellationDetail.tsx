@@ -24,6 +24,7 @@ import { DecisionDialog } from '@/components/interpellations/DecisionDialog';
 import { DeleteInterpellationDialog } from '@/components/interpellations/DeleteInterpellationDialog';
 import { InterpellationDeadline } from '@/components/interpellations/InterpellationDeadline';
 import { InterpellationStatusPill } from '@/components/interpellations/InterpellationStatusPill';
+import { InterpellationUploadDialog } from '@/components/interpellations/InterpellationUploadDialog';
 import { MarkSentDialog } from '@/components/interpellations/MarkSentDialog';
 import { DEADLINE_TEXT } from '@/components/interpellations/urgency';
 import { Button } from '@/components/ui/button';
@@ -139,7 +140,7 @@ function ReviewNotes({ item }: { item: InterpellationWithRelations }) {
           </h2>
           {waiting && (
             <p className="text-xs opacity-80">
-              Czeka na poprawki pracownika przez MCP (<code>interpellations_resubmit</code>).
+              Czeka na poprawki pracownika i nową wersję interpelacji.
             </p>
           )}
           {revised && (
@@ -156,7 +157,7 @@ function ReviewNotes({ item }: { item: InterpellationWithRelations }) {
 
 function stageDescription(item: InterpellationWithRelations, admin: boolean, mp: MpForms): string {
   if (AWAITING_DECISION.includes(item.status)) return admin ? 'Czeka na Twoją decyzję.' : `Czeka na decyzję ${mp.genitive}.`;
-  if (item.status === 'uwagi') return 'Czeka na poprawki pracownika i ponowne wgranie przez MCP.';
+  if (item.status === 'uwagi') return 'Czeka na poprawki pracownika i ponowne wgranie.';
   if (item.status === 'zaakceptowana') return 'Zaakceptowana. Czeka na wysłanie.';
   if (item.status === 'wyslana') return 'Wysłana. Obieg zakończony.';
   return 'Odrzucona. Znajduje się w archiwum.';
@@ -166,12 +167,14 @@ interface ActionPanelProps {
   item: InterpellationWithRelations;
   admin: boolean;
   writer: boolean;
+  uploader: boolean;
   onDecision: (decision: InterpellationDecision) => void;
   onMarkSent: () => void;
+  onResubmit: () => void;
   className?: string;
 }
 
-function ActionPanel({ item, admin, writer, onDecision, onMarkSent, className }: ActionPanelProps) {
+function ActionPanel({ item, admin, writer, uploader, onDecision, onMarkSent, onResubmit, className }: ActionPanelProps) {
   const awaiting = AWAITING_DECISION.includes(item.status);
   const mp = useMpForms();
   return (
@@ -196,6 +199,15 @@ function ActionPanel({ item, admin, writer, onDecision, onMarkSent, className }:
         </div>
       )}
 
+      {uploader && item.status === 'uwagi' && (
+        <div className="mt-4">
+          <Button className="w-full" onClick={onResubmit}>
+            <Upload />
+            Wgraj poprawioną wersję
+          </Button>
+        </div>
+      )}
+
       {writer && item.status === 'zaakceptowana' && (
         <div className="mt-4 space-y-3">
           {item.deadline_at && <InterpellationDeadline deadlineAt={item.deadline_at} />}
@@ -215,11 +227,14 @@ export default function InterpellationDetail() {
   const { profile } = useAuth();
   const admin = isAdmin(profile?.role);
   const writer = canWrite(profile?.role);
+  // Poprawioną wersję wgrywa Pracownik (jak narzędzie MCP interpellations_resubmit).
+  const uploader = profile?.role === 'pracownik';
   const { data: item, isLoading } = useInterpellation(id ?? null);
   const [contentTab, setContentTab] = useState<'preview' | 'text'>('preview');
   const [decision, setDecision] = useState<InterpellationDecision | null>(null);
   const [markSentOpen, setMarkSentOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [resubmitOpen, setResubmitOpen] = useState(false);
   const moduleNarrow = useModuleNarrow('md');
 
   if (isLoading) {
@@ -364,8 +379,10 @@ export default function InterpellationDetail() {
             item={item}
             admin={admin}
             writer={writer}
+            uploader={uploader}
             onDecision={setDecision}
             onMarkSent={() => setMarkSentOpen(true)}
+            onResubmit={() => setResubmitOpen(true)}
           />
           <InterpellationTimeline item={item} />
           {/* Trwałe usunięcie z dala od decyzji: pod historią, także na telefonie. */}
@@ -384,6 +401,7 @@ export default function InterpellationDetail() {
 
       <DecisionDialog item={item} decision={decision} onClose={() => setDecision(null)} />
       <MarkSentDialog item={markSentOpen ? item : null} onClose={() => setMarkSentOpen(false)} />
+      <InterpellationUploadDialog open={resubmitOpen} revise={item} onClose={() => setResubmitOpen(false)} />
       <DeleteInterpellationDialog
         item={deleteOpen ? item : null}
         onClose={() => setDeleteOpen(false)}

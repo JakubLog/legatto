@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import type { MpForms } from '../siteIdentity.js';
 import type { PushMessage } from './push.js';
+import { instanceFlags } from '../instance.js';
 
 export interface RenderContext {
   officeName: string;
@@ -228,7 +229,8 @@ function integrationMessage(raw: unknown): Message {
         text: 'Jeśli to nie Ty, od razu unieważnij dostęp w Integracjach i powiadom administratora biura.',
       },
     ],
-    cta: { label: 'Sprawdź integracje', path: SERVICE_PATHS[service] ?? '/biuro/admin/integracje' },
+    // Strona MCP istnieje tylko przy INSTANCE_AI=on - inaczej hub Integracji (jak src/lib/notificationInbox.ts).
+    cta: { label: 'Sprawdź integracje', path: (instanceFlags().ai ? SERVICE_PATHS[service] : undefined) ?? '/biuro/admin/integracje' },
     push: { title: 'Nowa usługa podłączona do konta', body: `${label[0].toUpperCase()}${label.slice(1)}. Jeśli to nie Ty, sprawdź Integracje.`, path: '/biuro/admin/integracje' },
   };
 }

@@ -1,20 +1,20 @@
 # Feature: Interpelacje
 
-> Obieg akceptacji interpelacji: Pracownik przygotowuje dokument w Claude i wgrywa HTML przez MCP, Poseł podejmuje decyzję, a zaakceptowany dokument czeka maksymalnie 24 godziny na wysłanie.
+> Obieg akceptacji interpelacji: Pracownik dodaje dokument w portalu (ręcznie: tekst albo plik HTML) lub przygotowuje go w Claude i wgrywa HTML przez MCP, Poseł podejmuje decyzję, a zaakceptowany dokument czeka maksymalnie 24 godziny na wysłanie. Ręczne wgranie działa także przy `INSTANCE_AI=off` (ADR 028).
 
 ## Role
 
 - **Poseł / Administrator** — widzi wszystkie interpelacje, podejmuje decyzje, potwierdza wysłanie i może trwale usunąć rekord.
-- **Pracownik** — tworzy interpelację i wgrywa poprawki przez MCP, odczytuje rekordy w swoim zakresie danych oraz potwierdza wysłanie.
+- **Pracownik** — tworzy interpelację i wgrywa poprawki (w portalu: `InterpellationUploadDialog` → `/api/integracje?op=interpellation_submit|interpellation_resubmit`; albo przez MCP), odczytuje rekordy w swoim zakresie danych oraz potwierdza wysłanie. Obie ścieżki wołają `submitInterpellation` / `resubmitInterpellation` (`api/_lib/tools/interpellations.ts`): ta sama walidacja, `sanitizeHtml`, wyodrębnienie tekstu i audyt (`mcp.interpellation_*` albo `portal.interpellation_*`, `via: portal`).
 - **Asystent** — odczyt w aplikacji zgodnie z `scope_interpellations`; nie ma dostępu do MCP.
 
-Token MCP i aplikację OAuth może utworzyć Poseł, Administrator albo Pracownik po uwierzytelnieniu 2FA (`aal2`).
+Token MCP i aplikację OAuth może utworzyć Poseł, Administrator albo Pracownik po uwierzytelnieniu 2FA (`aal2`) - tylko przy `INSTANCE_AI=on`; przy `off` integracja MCP i jej teksty w module są ukryte, a `/api/mcp` zwraca 404.
 
 ## Obieg
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Nowa: interpellations_submit (HTML)
+  [*] --> Nowa: interpellations_submit (MCP) / interpellation_submit (portal)
   Nowa --> Zaakceptowana: Akceptacja (opcjonalnie z poprawką Posła)
   Nowa --> Uwagi: Uwagi Posła
   Nowa --> Odrzucona: Odrzucenie
@@ -36,14 +36,14 @@ Statusy w bazie:
 - `wyslana` — proces zakończony wysyłką.
 - `odrzucona` — proces zakończony; rekord znajduje się w archiwum.
 
-Trigger `interpellations_enforce_workflow()` egzekwuje przejścia, role, numer wersji i znaczniki czasu. Treść (`content_html`, `content_text`, `subject`, `recipient`) zmienia wyłącznie MCP (service role, bez `auth.uid()`) w dwóch przejściach: `uwagi` → `po_poprawkach` (Pracownik, `interpellations_resubmit`) oraz `nowa`/`po_poprawkach` → `zaakceptowana` (Poseł/Administrator poprawia sam przy akceptacji, migracja `20261110300000_interpellation_mp_correction.sql`); oba podnoszą `revision`. Dziennik audytu zapisuje każdą zmianę statusu. Odrzucenie nie przenosi danych do osobnej tabeli.
+Trigger `interpellations_enforce_workflow()` egzekwuje przejścia, role, numer wersji i znaczniki czasu. Treść (`content_html`, `content_text`, `subject`, `recipient`) zmienia wyłącznie serwer (service role, bez `auth.uid()`: MCP albo `api/integracje.ts`) w dwóch przejściach: `uwagi` → `po_poprawkach` (Pracownik, `interpellations_resubmit` albo portal `interpellation_resubmit`; HTML musi się zmienić - 22023 → błąd walidacji „Poprawiona wersja musi różnić się treścią”) oraz `nowa`/`po_poprawkach` → `zaakceptowana` (Poseł/Administrator poprawia sam przy akceptacji - tylko MCP, migracja `20261110300000_interpellation_mp_correction.sql`); oba podnoszą `revision`. Dziennik audytu zapisuje każdą zmianę statusu; ścieżka portalu zapisuje przed operacją `portal.interpellation_request` (fail-closed, 503 przy błędzie audytu), po niej `portal.interpellation_submit|resubmit` - przez `service_log_audit`, bez `via_mcp`. Odrzucenie nie przenosi danych do osobnej tabeli.
 
 ## Dane
 
 Tabela `public.interpellations` przechowuje:
 
 - `recipient` — odbiorca interpelacji (organ, np. „Minister Zdrowia”); w UI zawsze „Odbiorca”,
-- `content_html` — HTML przekazany przez MCP po sanityzacji (`api/_lib/sanitize-html.ts`: allow-lista znaczników strukturalnych bez `style`/`class`/`id`/`hidden`, bez `<style>`/`<script>`/`<template>`/`<noscript>`/`<svg>`, linki tylko http(s)/mailto, obrazy tylko `data:image/*`; nieznane znaczniki rozpakowane) - create, resubmit i decide,
+- `content_html` — HTML przekazany przez MCP albo formularz portalu (tekst → akapity `<p>` albo wczytany plik HTML; plik dekodowany jako UTF-8, a gdy nim nie jest - wg `<meta charset>` albo windows-1250) po sanityzacji (`api/_lib/sanitize-html.ts`: allow-lista znaczników strukturalnych bez `style`/`class`/`id`/`hidden`, bez `<style>`/`<script>`/`<template>`/`<noscript>`/`<svg>`, linki tylko http(s)/mailto, obrazy tylko `data:image/*`; nieznane znaczniki rozpakowane) - create, resubmit i decide,
 - `content_text` — tekst wyekstrahowany (html-to-text) z HTML po sanityzacji, więc podgląd i tekst kopiowany do Sejmu pokazują to samo; wiersze sprzed zmiany nie są przeliczane,
 - `review_notes` — ostatnie uwagi lub komentarz Posła,
 - `revision` — numer wersji, zwiększany przy `interpellations_resubmit` i przy poprawce Posła w `interpellations_decide`,
@@ -88,7 +88,7 @@ MCP działa przez service role, dlatego każde zapytanie do tabeli stosuje `appl
 - Nad listą widoczne są trzy średnie czasy procesu, trendy tydzień-do-tygodnia oraz liczba dokumentów utworzonych i wysłanych w bieżącym tygodniu.
 - `/biuro/admin/integracje/mcp` — tokeny MCP i aplikacje OAuth.
 
-Stary edytor, generowanie szkicu przez `ai-proxy`, eksport PDF i statusy `draft/generated/edited/sent` zostały usunięte.
+Stary edytor, generowanie szkicu przez `ai-proxy` (Edge Function usunięta 2026-11-16), eksport PDF i statusy `draft/generated/edited/sent` zostały usunięte. Formularz ręczny zamienia tekst na akapity `<p>` (pusta linia = nowy akapit); przy poprawce startuje od `content_text` (formatowanie HTML poprzedniej wersji nie wraca - pełną strukturę daje wczytanie pliku HTML).
 
 ## Kluczowe pliki
 
@@ -100,6 +100,7 @@ Stary edytor, generowanie szkicu przez `ai-proxy`, eksport PDF i statusy `draft/
 - `src/lib/interpellations.ts`
 - `src/pages/Interpelacje.tsx`
 - `src/pages/InterpellationDetail.tsx`
-- `src/components/interpellations/*`
+- `src/components/interpellations/*` (ręczne wgranie: `InterpellationUploadDialog.tsx`)
+- `api/integracje.ts` — operacje `interpellation_submit` / `interpellation_resubmit`
 - `src/components/dashboard/InterpellationsCard.tsx`
 - `src/hooks/useDashboardStats.ts`

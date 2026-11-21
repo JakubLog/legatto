@@ -1,4 +1,5 @@
 import type { AppRole } from '@/integrations/supabase/types';
+import { INSTANCE } from '@/lib/instance';
 import { isAdmin } from '@/lib/permissions';
 
 // Katalog rodzajów powiadomień - musi zgadzać się z migracją (get/set_my_notification_preferences)
@@ -59,7 +60,7 @@ export const NOTIFICATION_KINDS: NotificationKindDef[] = [
     key: 'security_integration',
     category: 'bezpieczenstwo',
     label: 'Nowa usługa podłączona do konta',
-    description: 'Token MCP, aplikacja OAuth (np. Claude), kalendarz ICS.',
+    description: INSTANCE.ai ? 'Token MCP, aplikacja OAuth (np. Claude), kalendarz ICS.' : 'Kalendarz ICS.',
     roles: null,
     defaultEmail: yes,
     defaultPush: yes,

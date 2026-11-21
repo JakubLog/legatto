@@ -1,14 +1,14 @@
 // Wspolne dla zadan PoliAI (czat i przygotowanie zalacznikow): sesja Supabase (Bearer
-// access_token, aal2, rola MCP), ustawienia AI z Integracje -> AI oraz dzienne limity liczone
-// z audytu (atomowo w RPC poliai_claim_daily_slot).
+// access_token, aal2, rola MCP), ustawienia AI (env operatora albo Integracje -> AI) oraz
+// dzienne limity liczone z audytu (atomowo w RPC poliai_claim_daily_slot).
 
 import type { VercelRequest } from '@vercel/node';
-import { createClient } from '@supabase/supabase-js';
-import { getServiceClient } from '../supabase.js';
+import { getAnonClient, getServiceClient } from '../supabase.js';
 import { isAal2Session } from '../jwt.js';
 import { buildAuthContext, isMcpRole, loadAuthProfile, parseBearer, type McpAuthContext } from '../auth.js';
 import { auditMetadata } from '../audit.js';
-import { DEFAULT_MODEL } from './anthropic.js';
+import { AI_DISABLED, instanceFlags, operatorAi } from '../instance.js';
+import { DEFAULT_FAST_MODEL, DEFAULT_MODEL } from './anthropic.js';
 import { getSiteIdentity, mpForms } from '../siteIdentity.js';
 
 export class HttpError extends Error {
@@ -25,10 +25,7 @@ export async function authenticate(req: VercelRequest): Promise<McpAuthContext> 
   const token = parseBearer(req.headers.authorization);
   if (!token) throw new HttpError(401, 'Brak sesji');
 
-  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? '';
-  const anonKey = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY ?? '';
-  const userClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false } });
-  const { data, error } = await userClient.auth.getUser(token);
+  const { data, error } = await getAnonClient().auth.getUser(token);
   if (error || !data.user) throw new HttpError(401, 'Nieprawidłowa lub wygasła sesja');
   if (!isAal2Session(token, data.user)) {
     throw new HttpError(403, 'Wymagana weryfikacja dwuetapowa (2FA)');
@@ -49,21 +46,39 @@ export async function authenticate(req: VercelRequest): Promise<McpAuthContext> 
 
 export interface AiSettings {
   apiKey: string;
+  /** Glowny model: czat, raport budzetu. */
   model: string;
+  /** Szybki model: wstep, przyciski, pamiec, kompresja kontekstu, OCR. */
+  fastModel: string;
 }
 
-/** Klucz (Vault, service_get_secrets) i model z Integracje -> AI. Brak klucza = 409 AI_NOT_CONFIGURED. */
+async function loadVaultKey(): Promise<string> {
+  const { data, error } = await getServiceClient().rpc('service_get_secrets', { p_keys: ['anthropic_api_key'] });
+  if (error) throw new Error(`service_get_secrets: ${error.message}`);
+  const secrets = (data ?? []) as { key: string; value: string }[];
+  return secrets.find((row) => row.key === 'anthropic_api_key')?.value.trim() ?? '';
+}
+
+async function loadPanelModel(): Promise<string> {
+  const { data, error } = await getServiceClient().from('app_settings').select('value').eq('key', 'ai_model').maybeSingle();
+  if (error) throw new Error(`app_settings: ${error.message}`);
+  return typeof data?.value === 'string' ? data.value.trim() : '';
+}
+
+/**
+ * Klucz i modele AI. Pierwszenstwo ma env operatora (AI_API_KEY, AI_MODEL, AI_FAST_MODEL) -
+ * wtedy Vault / app_settings nie sa czytane; inaczej klucz z Vault (service_get_secrets) i model
+ * z Integracje -> AI. Przy kluczu operatora model wybiera tylko operator (AI_MODEL albo domyslny) -
+ * koszt idzie na jego konto, wiec panel go nie zmienia. INSTANCE_AI != on = 404 AI_DISABLED (druga
+ * linia obrony za bramka handlera), brak klucza = 409 AI_NOT_CONFIGURED.
+ */
 export async function requireAiSettings(): Promise<AiSettings> {
-  const supabase = getServiceClient();
-  const [secretsRes, modelRes] = await Promise.all([
-    supabase.rpc('service_get_secrets', { p_keys: ['anthropic_api_key'] }),
-    supabase.from('app_settings').select('value').eq('key', 'ai_model').maybeSingle(),
+  if (!instanceFlags().ai) throw new HttpError(AI_DISABLED.status, AI_DISABLED.error, AI_DISABLED.code);
+  const operator = operatorAi();
+  const [apiKey, model] = await Promise.all([
+    operator.apiKey ?? loadVaultKey(),
+    operator.model ?? (operator.apiKey ? DEFAULT_MODEL : loadPanelModel()),
   ]);
-  if (secretsRes.error) throw new Error(`service_get_secrets: ${secretsRes.error.message}`);
-  if (modelRes.error) throw new Error(`app_settings: ${modelRes.error.message}`);
-  const secrets = (secretsRes.data ?? []) as { key: string; value: string }[];
-  const apiKey = secrets.find((row) => row.key === 'anthropic_api_key')?.value.trim() ?? '';
-  const model = typeof modelRes.data?.value === 'string' ? modelRes.data.value.trim() : '';
   if (!apiKey) {
     const mp = mpForms((await getSiteIdentity()).mp_gender);
     throw new HttpError(
@@ -72,7 +87,7 @@ export async function requireAiSettings(): Promise<AiSettings> {
       'AI_NOT_CONFIGURED',
     );
   }
-  return { apiKey, model: model || DEFAULT_MODEL };
+  return { apiKey, model: model || DEFAULT_MODEL, fastModel: operator.fastModel ?? DEFAULT_FAST_MODEL };
 }
 
 export interface DailyLimit {

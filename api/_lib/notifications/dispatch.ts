@@ -5,6 +5,7 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { z } from 'zod';
 import { getServiceClient } from '../supabase.js';
+import { instanceFlags } from '../instance.js';
 import { getSiteIdentity, mpForms, officeFullName } from '../siteIdentity.js';
 import { ResendError, sendEmail } from './resend.js';
 import { sendPushToUser, type PushResult } from './push.js';
@@ -53,11 +54,19 @@ export interface DispatchContext {
 }
 
 export async function loadDispatchContext(): Promise<DispatchContext> {
-  const [settings, resendKey, identity] = await Promise.all([loadSettings(), loadResendKey(), getSiteIdentity()]);
+  // INSTANCE_EMAIL=off: e-mail niedostępny niezależnie od email_enabled (zapisane, ale pomijane),
+  // bez odczytu klucza Resend. Push działa dalej.
+  const emailOn = instanceFlags().email;
+  const [settings, resendKey, identity] = await Promise.all([
+    loadSettings(),
+    emailOn ? loadResendKey() : Promise.resolve(''),
+    getSiteIdentity(),
+  ]);
   // loadSettings: adres instancji z konfiguracji, wartość z bazy tylko bez niej (lokalnie).
   const appUrl = settings.app_url;
   const officeName = officeFullName(identity);
-  const emailAvailable = settings.email_enabled && Boolean(resendKey) && Boolean(settings.from_email) && Boolean(appUrl);
+  const emailAvailable =
+    emailOn && settings.email_enabled && Boolean(resendKey) && Boolean(settings.from_email) && Boolean(appUrl);
   const vapid = settings.push_enabled ? await ensureVapidKeys() : null;
   const fromName = (settings.from_name || officeName).replace(/[\r\n<>"]/g, ' ').trim();
   return {

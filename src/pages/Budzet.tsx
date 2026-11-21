@@ -14,7 +14,7 @@ import { currentMonthIso, currentYearIso, formatPLN, monthRangeIso } from '@/lib
 import { BudgetKpiCard } from '@/components/expenses/BudgetKpiCard';
 import { BudgetLimitDialog } from '@/components/expenses/BudgetLimitDialog';
 import { BudgetProgressCard } from '@/components/expenses/BudgetProgressCard';
-import { BudgetViewTabs, type BudgetView } from '@/components/expenses/BudgetViewTabs';
+import { BudgetViewTabs, parseBudgetView, type BudgetView } from '@/components/expenses/BudgetViewTabs';
 import { MonthSelector } from '@/components/expenses/MonthSelector';
 import { ExpensesFilters } from '@/components/expenses/ExpensesFilters';
 import { ExpensesList } from '@/components/expenses/ExpensesList';
@@ -58,13 +58,9 @@ export default function Budzet() {
   const canEditLimit = isAdmin(profile?.role);
   const budget = useMonthlyBudgetLimit();
   const [searchParams, setSearchParams] = useSearchParams();
-  const widokParam = searchParams.get('widok');
   // Deep-link `?open=<id>` dotyczy listy wydatków - zawsze pokazuje widok Wydatki.
-  const widok: BudgetView = searchParams.get('open')
-    ? 'wydatki'
-    : widokParam === 'analityka' || widokParam === 'raporty' || widokParam === 'rozliczenie'
-      ? widokParam
-      : 'wydatki';
+  // Raporty AI przy wyłączonym AI na instancji też kończą na Wydatkach.
+  const widok: BudgetView = searchParams.get('open') ? 'wydatki' : parseBudgetView(searchParams.get('widok'));
   // Miesiąc wspólny dla widoków miesięcznych; rozliczenie ma własny wybór roku.
   const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthIso());
   const currentYear = Number(currentYearIso());

@@ -32,6 +32,7 @@ const INTERPELLATION_STATUSES = [
 const DECISIONS = ['zaakceptowana', 'uwagi', 'odrzucona'] as const;
 const PRACOWNIK_ONLY: readonly McpRole[] = ['pracownik'];
 const MAX_HTML_LENGTH = 500_000;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function extractText(html: string): string {
   const text = convert(html, {
@@ -113,6 +114,104 @@ async function verifyCaseAccess(
 function deadlineSituation(deadlineAt: string | null): 'brak' | 'w_terminie' | 'po_terminie' {
   if (!deadlineAt) return 'brak';
   return new Date(deadlineAt).getTime() <= Date.now() ? 'po_terminie' : 'w_terminie';
+}
+
+/**
+ * Nowa interpelacja (status "Nowa") - wspolne dla narzedzia MCP interpellations_submit i recznego
+ * dodawania w portalu (api/integracje.ts): ta sama walidacja, sanityzacja HTML i audyt.
+ */
+export async function submitInterpellation(
+  args: Record<string, unknown>,
+  ctx: McpAuthContext,
+  auditAction: string,
+): Promise<Record<string, unknown>> {
+  const recipient = requireString(args, 'recipient', 200).trim();
+  const subject = requireString(args, 'subject', 200).trim();
+  const html = requireString(args, 'html', MAX_HTML_LENGTH);
+  if (!recipient || !subject) {
+    throw new ToolValidationError('Pola recipient i subject nie moga zawierac samych spacji.');
+  }
+  const content = prepareContent(html);
+  const caseId = optionalUuid(args, 'case_id');
+  const supabase = getServiceClient();
+  await verifyCaseAccess(supabase, caseId, ctx);
+  const signatoryId = await resolveSignatory(supabase, optionalUuid(args, 'signatory_id'));
+
+  const { data, error } = await supabase
+    .from('interpellations')
+    .insert({
+      recipient,
+      subject,
+      ...content,
+      case_id: caseId,
+      signatory_id: signatoryId,
+      status: 'nowa',
+      created_by: ctx.userId,
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+
+  await logAudit(ctx, auditAction, {
+    entityType: 'interpellation',
+    entityId: data.id,
+    metadata: { ...(ctx.channel === 'portal' ? {} : { tool: 'interpellations_submit' }), subject, signatory_id: signatoryId },
+  });
+  return data;
+}
+
+/**
+ * Poprawiona wersja po uwagach Posla ("Uwagi" -> "Po poprawkach") - wspolne dla MCP
+ * interpellations_resubmit i portalu. null = brak interpelacji w statusie Uwagi w zakresie danych.
+ */
+export async function resubmitInterpellation(
+  args: Record<string, unknown>,
+  ctx: McpAuthContext,
+  auditAction: string,
+): Promise<Record<string, unknown> | null> {
+  const id = requireString(args, 'id', 64);
+  if (!UUID_RE.test(id)) throw new ToolValidationError('Nieprawidłowy identyfikator interpelacji.');
+  const html = requireString(args, 'html', MAX_HTML_LENGTH);
+  const update: Record<string, unknown> = {
+    ...prepareContent(html),
+    status: 'po_poprawkach',
+  };
+  if (args.recipient !== undefined) {
+    const recipient = requireString(args, 'recipient', 200).trim();
+    if (!recipient) throw new ToolValidationError('Pole recipient nie moze zawierac samych spacji.');
+    update.recipient = recipient;
+  }
+  if (args.subject !== undefined) {
+    const subject = requireString(args, 'subject', 200).trim();
+    if (!subject) throw new ToolValidationError('Pole subject nie moze zawierac samych spacji.');
+    update.subject = subject;
+  }
+
+  const { data, error } = await applyDataScope(
+    getServiceClient()
+      .from('interpellations')
+      .update(update)
+      .eq('id', id)
+      .eq('status', 'uwagi')
+      .select(),
+    ctx,
+    'interpellations',
+  ).maybeSingle();
+  if (error) {
+    // interpellations_workflow: poprawka musi zmieniać treść (22023) - błąd dla użytkownika, nie 500.
+    if (error.code === '22023') {
+      throw new ToolValidationError('Poprawiona wersja musi różnić się treścią od poprzedniej.');
+    }
+    throw new Error(error.message);
+  }
+  if (!data) return null;
+
+  await logAudit(ctx, auditAction, {
+    entityType: 'interpellation',
+    entityId: id,
+    metadata: { ...(ctx.channel === 'portal' ? {} : { tool: 'interpellations_resubmit' }), revision: data.revision },
+  });
+  return data;
 }
 
 export const interpellationsTools: ToolDefinition[] = [
@@ -299,38 +398,7 @@ export const interpellationsTools: ToolDefinition[] = [
     roles: PRACOWNIK_ONLY,
     nonDestructive: true,
     handler: async (args, ctx) => {
-      const recipient = requireString(args, 'recipient', 200).trim();
-      const subject = requireString(args, 'subject', 200).trim();
-      const html = requireString(args, 'html', MAX_HTML_LENGTH);
-      if (!recipient || !subject) {
-        throw new ToolValidationError('Pola recipient i subject nie moga zawierac samych spacji.');
-      }
-      const content = prepareContent(html);
-      const caseId = optionalUuid(args, 'case_id');
-      const supabase = getServiceClient();
-      await verifyCaseAccess(supabase, caseId, ctx);
-      const signatoryId = await resolveSignatory(supabase, optionalUuid(args, 'signatory_id'));
-
-      const { data, error } = await supabase
-        .from('interpellations')
-        .insert({
-          recipient,
-          subject,
-          ...content,
-          case_id: caseId,
-          signatory_id: signatoryId,
-          status: 'nowa',
-          created_by: ctx.userId,
-        })
-        .select()
-        .single();
-      if (error) throw new Error(error.message);
-
-      await logAudit(ctx, 'mcp.interpellation_submit', {
-        entityType: 'interpellation',
-        entityId: data.id,
-        metadata: { tool: 'interpellations_submit', subject, signatory_id: signatoryId },
-      });
+      const data = await submitInterpellation(args, ctx, 'mcp.interpellation_submit');
       return jsonResult({ created: true, interpellation: await withLabel(data, INTERPELLATION_LABELS) });
     },
   },
@@ -360,47 +428,13 @@ export const interpellationsTools: ToolDefinition[] = [
     roles: PRACOWNIK_ONLY,
     nonDestructive: true,
     handler: async (args, ctx) => {
-      const id = requireString(args, 'id', 64);
-      const html = requireString(args, 'html', MAX_HTML_LENGTH);
-      const update: Record<string, unknown> = {
-        ...prepareContent(html),
-        status: 'po_poprawkach',
-      };
-      if (args.recipient !== undefined) {
-        const recipient = requireString(args, 'recipient', 200).trim();
-        if (!recipient) throw new ToolValidationError('Pole recipient nie moze zawierac samych spacji.');
-        update.recipient = recipient;
-      }
-      if (args.subject !== undefined) {
-        const subject = requireString(args, 'subject', 200).trim();
-        if (!subject) throw new ToolValidationError('Pole subject nie moze zawierac samych spacji.');
-        update.subject = subject;
-      }
-
-      const supabase = getServiceClient();
-      const { data, error } = await applyDataScope(
-        supabase
-          .from('interpellations')
-          .update(update)
-          .eq('id', id)
-          .eq('status', 'uwagi')
-          .select(),
-        ctx,
-        'interpellations',
-      ).maybeSingle();
-      if (error) throw new Error(error.message);
+      const data = await resubmitInterpellation(args, ctx, 'mcp.interpellation_resubmit');
       if (!data) {
         return textResult(
-          `Interpelacja o id=${id} nie istnieje, nie ma statusu Uwagi albo jest poza Twoim zakresem danych.`,
+          `Interpelacja o id=${String(args.id)} nie istnieje, nie ma statusu Uwagi albo jest poza Twoim zakresem danych.`,
           true,
         );
       }
-
-      await logAudit(ctx, 'mcp.interpellation_resubmit', {
-        entityType: 'interpellation',
-        entityId: id,
-        metadata: { tool: 'interpellations_resubmit', revision: data.revision },
-      });
       return jsonResult({ updated: true, interpellation: await withLabel(data, INTERPELLATION_LABELS) });
     },
   },

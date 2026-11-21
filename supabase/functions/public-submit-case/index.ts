@@ -32,7 +32,7 @@
 // }
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { corsHeadersFor, INSTANCE_ORIGINS } from '../_shared/cors.ts';
+import { corsHeadersFor, INSTANCE_ORIGINS, IS_LOCAL_DEV } from '../_shared/cors.ts';
 
 interface SubmitBody {
   reporter_name?: unknown;
@@ -73,14 +73,16 @@ const GLOBAL_RATE_LIMIT_PER_HOUR = 60;
 const USER_AGENT_MAX_LENGTH = 512;
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 // Hosty, na których może być osadzony widget. Sekret TURNSTILE_ALLOWED_HOSTNAMES
-// (lista po przecinku) zastępuje domyślną listę: hosty z ALLOWED_ORIGINS + localhost (dev).
+// (lista po przecinku) zastępuje domyślną listę: hosty z ALLOWED_ORIGINS; localhost tylko
+// przy nieustawionym ALLOWED_ORIGINS (lokalne dev).
 const TURNSTILE_ALLOWED_HOSTNAMES: readonly string[] = (() => {
   const explicit = (Deno.env.get('TURNSTILE_ALLOWED_HOSTNAMES') ?? '')
     .split(',')
     .map((h) => h.trim().toLowerCase())
     .filter(Boolean);
   if (explicit.length > 0) return explicit;
-  return [...new Set([...INSTANCE_ORIGINS.map((o) => new URL(o).hostname), 'localhost'])];
+  if (IS_LOCAL_DEV) return ['localhost'];
+  return [...new Set(INSTANCE_ORIGINS.map((o) => new URL(o).hostname))];
 })();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^[+\d\s()-]{6,20}$/;

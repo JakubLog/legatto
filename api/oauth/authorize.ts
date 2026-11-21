@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getServiceClient } from '../_lib/supabase.js';
 import { CODE_CHALLENGE_S256_RE, parseRedirectUri, stringParam } from '../_lib/oauth.js';
 import { resolveIssuer } from '../_lib/issuer.js';
+import { rejectIfAiDisabled } from '../_lib/instance.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   return handlerInner(req, res).catch((err) => {
@@ -11,6 +12,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 async function handlerInner(req: VercelRequest, res: VercelResponse) {
+  // OAuth sluzy tylko klientom MCP (Claude) - bez AI na instancji nie istnieje.
+  if (rejectIfAiDisabled(res)) return;
   // Bez CORS: klient OAuth przychodzi tu nawigacja przegladarki (redirect), nie fetch z obcego originu -
   // obca strona nie odczyta odpowiedzi (np. czy dany client_id istnieje).
   if (req.method !== 'GET') return res.status(405).end();

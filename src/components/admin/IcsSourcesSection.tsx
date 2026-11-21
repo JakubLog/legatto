@@ -107,7 +107,7 @@ export function IcsSourcesSection() {
       <SettingsCard
         icon={CalendarDays}
         title="Źródła kalendarzy"
-        description="Prywatne linki ICS z Google, Apple lub Outlook. Synchronizacja ręczna."
+        description="Prywatne linki ICS z Google, Apple lub Outlook. Synchronizacja automatyczna raz dziennie lub ręczna."
         actions={
           <Button size="sm" onClick={() => setAddOpen(true)}>
             <Plus />

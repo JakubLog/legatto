@@ -28,7 +28,10 @@ import {
   useSendTestNotification,
 } from '@/hooks/useNotifications';
 import { useSecretSettingsStatus } from '@/hooks/useSecretSettings';
+import { INSTANCE } from '@/lib/instance';
 import type { NotificationsAdminStatus, NotificationsSettings } from '@/lib/notifications';
+
+const EMAIL_DISABLED_TEXT = 'Wysyłka e-mail jest wyłączona przez operatora instancji';
 
 const RESEND_KEYS_URL = 'https://resend.com/api-keys';
 const RESEND_DOMAINS_URL = 'https://resend.com/domains';
@@ -86,7 +89,29 @@ function ResendStatusBadge({
   return null;
 }
 
+/** Klucz Resend; przy INSTANCE_EMAIL=off tylko informacja (bez zapytań o klucz i Resend). */
 export function ResendKeyCard() {
+  if (!INSTANCE.email) return <EmailDisabledCard />;
+  return <ResendKeyConfig />;
+}
+
+function EmailDisabledCard() {
+  return (
+    <SettingsCard
+      icon={Mail}
+      title="E-mail"
+      description={`${EMAIL_DISABLED_TEXT}.`}
+      actions={<StatusPill tone="neutral">Wyłączone</StatusPill>}
+    >
+      <p className="text-xs text-muted-foreground">
+        Powiadomienia trafiają do użytkowników tylko jako push. Włączenie e-maili wymaga zmiany konfiguracji
+        wdrożenia przez operatora.
+      </p>
+    </SettingsCard>
+  );
+}
+
+function ResendKeyConfig() {
   const secretsQ = useSecretSettingsStatus();
   const adminQ = useNotificationsAdminStatus();
   const saveKeyMut = useSaveResendKey();
@@ -288,24 +313,31 @@ export function NotificationsSettingsCard() {
   const domainUnverified =
     Boolean(domain) && domains !== undefined && !domains.some((d) => d.name.toLowerCase() === domain && d.status === 'verified');
   const dirty = JSON.stringify(form) !== JSON.stringify(adminQ.data?.settings);
+  const emailOn = INSTANCE.email;
 
   return (
     <SettingsCard
       icon={SlidersHorizontal}
-      title="Nadawca i ustawienia"
-      description="Adres nadawcy, linki w wiadomościach i kanały włączone w biurze."
+      title={emailOn ? 'Nadawca i ustawienia' : 'Ustawienia'}
+      description={
+        emailOn
+          ? 'Adres nadawcy, linki w wiadomościach i kanały włączone w biurze.'
+          : 'Linki w powiadomieniach i powiadomienia push w biurze.'
+      }
       footer={
         <>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={sendTest}
-            disabled={testMut.isPending || dirty || !form.email_enabled}
-            title={dirty ? 'Najpierw zapisz zmiany' : undefined}
-          >
-            {testMut.isPending ? <Loader2 className="animate-spin" /> : <Send />}
-            Wyślij test e-mail do mnie
-          </Button>
+          {emailOn && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={sendTest}
+              disabled={testMut.isPending || dirty || !form.email_enabled}
+              title={dirty ? 'Najpierw zapisz zmiany' : undefined}
+            >
+              {testMut.isPending ? <Loader2 className="animate-spin" /> : <Send />}
+              Wyślij test e-mail do mnie
+            </Button>
+          )}
           <Button onClick={() => void handleSave()} disabled={saveMut.isPending || !dirty}>
             {saveMut.isPending ? <Loader2 className="animate-spin" /> : <Save />}
             Zapisz
@@ -315,34 +347,38 @@ export function NotificationsSettingsCard() {
     >
       <div className="space-y-5">
         <div className="grid gap-4 @md:grid-cols-2">
-          <Field id="notif-from-email" label="Adres nadawcy" hint="W domenie zweryfikowanej w Resend.">
-            <Input
-              id="notif-from-email"
-              type="email"
-              value={form.from_email}
-              onChange={(e) => set('from_email', e.target.value)}
-              placeholder="powiadomienia@twojadomena.pl"
-              autoComplete="off"
-            />
-          </Field>
-          <Field id="notif-from-name" label="Nazwa nadawcy">
-            <Input
-              id="notif-from-name"
-              value={form.from_name}
-              onChange={(e) => set('from_name', e.target.value)}
-              placeholder="Biuro Poselskie"
-            />
-          </Field>
-          <Field id="notif-reply-to" label="Adres do odpowiedzi" hint="Opcjonalnie. Puste = odpowiedzi do nadawcy.">
-            <Input
-              id="notif-reply-to"
-              type="email"
-              value={form.reply_to}
-              onChange={(e) => set('reply_to', e.target.value)}
-              placeholder="biuro@twojadomena.pl"
-              autoComplete="off"
-            />
-          </Field>
+          {emailOn && (
+            <>
+              <Field id="notif-from-email" label="Adres nadawcy" hint="W domenie zweryfikowanej w Resend.">
+                <Input
+                  id="notif-from-email"
+                  type="email"
+                  value={form.from_email}
+                  onChange={(e) => set('from_email', e.target.value)}
+                  placeholder="powiadomienia@twojadomena.pl"
+                  autoComplete="off"
+                />
+              </Field>
+              <Field id="notif-from-name" label="Nazwa nadawcy">
+                <Input
+                  id="notif-from-name"
+                  value={form.from_name}
+                  onChange={(e) => set('from_name', e.target.value)}
+                  placeholder="Biuro Poselskie"
+                />
+              </Field>
+              <Field id="notif-reply-to" label="Adres do odpowiedzi" hint="Opcjonalnie. Puste = odpowiedzi do nadawcy.">
+                <Input
+                  id="notif-reply-to"
+                  type="email"
+                  value={form.reply_to}
+                  onChange={(e) => set('reply_to', e.target.value)}
+                  placeholder="biuro@twojadomena.pl"
+                  autoComplete="off"
+                />
+              </Field>
+            </>
+          )}
           <Field id="notif-app-url" label="Adres portalu" hint="Do linków w wiadomościach. Puste = bieżący adres.">
             <Input
               id="notif-app-url"
@@ -355,21 +391,30 @@ export function NotificationsSettingsCard() {
           </Field>
         </div>
 
-        {domainUnverified && (
+        {emailOn && domainUnverified && (
           <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
             Domena <code className="font-mono">{domain}</code> nie jest zweryfikowana w Resend. Wiadomości nie zostaną
             wysłane.
           </p>
         )}
 
+        {!emailOn && (
+          <p className="flex items-start gap-1.5 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            <Mail className="mt-px h-3.5 w-3.5 shrink-0" />
+            {EMAIL_DISABLED_TEXT}. Zapisane ustawienia e-mail są zachowane, ale nieużywane.
+          </p>
+        )}
+
         <div className="divide-y rounded-lg border">
-          <ToggleRow
-            id="notif-email-enabled"
-            title="Wysyłka e-mail"
-            description="Powiadomienia i podsumowania e-mailem przez Resend."
-            checked={form.email_enabled}
-            onChange={(v) => set('email_enabled', v)}
-          />
+          {emailOn && (
+            <ToggleRow
+              id="notif-email-enabled"
+              title="Wysyłka e-mail"
+              description="Powiadomienia i podsumowania e-mailem przez Resend."
+              checked={form.email_enabled}
+              onChange={(v) => set('email_enabled', v)}
+            />
+          )}
           <ToggleRow
             id="notif-push-enabled"
             title="Powiadomienia push"
@@ -377,13 +422,15 @@ export function NotificationsSettingsCard() {
             checked={form.push_enabled}
             onChange={(v) => set('push_enabled', v)}
           />
-          <ToggleRow
-            id="notif-include-titles"
-            title="Tytuły spraw i wydarzeń w treści e-maili"
-            description="Wyłączone: e-mail zawiera tylko rodzaj zdarzenia i link. Push nigdy nie zawiera tytułów."
-            checked={form.include_titles}
-            onChange={(v) => set('include_titles', v)}
-          />
+          {emailOn && (
+            <ToggleRow
+              id="notif-include-titles"
+              title="Tytuły spraw i wydarzeń w treści e-maili"
+              description="Wyłączone: e-mail zawiera tylko rodzaj zdarzenia i link. Push nigdy nie zawiera tytułów."
+              checked={form.include_titles}
+              onChange={(v) => set('include_titles', v)}
+            />
+          )}
         </div>
       </div>
     </SettingsCard>

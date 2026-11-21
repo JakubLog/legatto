@@ -3,6 +3,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { getServiceClient } from '../_lib/supabase.js';
 import { isMcpRole, type McpRole } from '../_lib/auth.js';
 import { OAUTH_TOKEN_TTL_SECONDS, parseRedirectUri, stringParam } from '../_lib/oauth.js';
+import { rejectIfAiDisabled } from '../_lib/instance.js';
 
 // Zakresy tokena wg roli wlasciciela - to samo mapowanie co create_mcp_token.
 // Pracownik ma zapis interpelacji przez narzedzia submit/resubmit.
@@ -65,6 +66,8 @@ async function handlerInner(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(204).end();
+  // OAuth sluzy tylko klientom MCP (Claude) - bez AI na instancji nie istnieje.
+  if (rejectIfAiDisabled(res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' });
 
   const body = parseBody(req);

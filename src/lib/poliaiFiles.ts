@@ -210,7 +210,7 @@ async function decodeImage(file: File, mime: string): Promise<DecodedImage> {
     URL.revokeObjectURL(url);
     throw new PoliAIFileError(
       mime === 'image/heic' || mime === 'image/heif'
-        ? `Ta przeglądarka nie odczyta zdjęcia HEIC „${file.name}”. Otwórz ePosła w Safari albo zapisz zdjęcie jako JPG.`
+        ? `Ta przeglądarka nie odczyta zdjęcia HEIC „${file.name}”. Otwórz aplikację w Safari albo zapisz zdjęcie jako JPG.`
         : `Ta przeglądarka nie odczyta obrazu „${file.name}”. Zapisz go jako JPG albo PNG.`,
     );
   }

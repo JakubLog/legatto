@@ -13,6 +13,7 @@ import { PublicLayout } from '@/components/layout/PublicLayout';
 import { Toaster } from '@/components/ui/sonner';
 import { isSupabaseConfigured } from '@/integrations/supabase/client';
 import { isStandalonePwa } from '@/lib/pwa';
+import { INSTANCE } from '@/lib/instance';
 
 const HomePage = lazy(() => import('@/pages/HomePage'));
 const Login = lazy(() => import('@/pages/Login'));
@@ -85,8 +86,11 @@ export default function App() {
               {/* Logowanie - bez layoutu */}
               <Route path="/login" element={<Login />} />
 
-              {/* OAuth consent — auth obsługiwana wewnątrz komponentu; tryb prywatny zasłania też zgodę. */}
-              <Route path="/oauth/consent" element={<PrivacyGate><OAuthConsent /></PrivacyGate>} />
+              {/* OAuth consent — auth obsługiwana wewnątrz komponentu; tryb prywatny zasłania też zgodę.
+                  Tylko z włączonym AI (INSTANCE_AI=on): OAuth służy wyłącznie klientom MCP. */}
+              {INSTANCE.ai && (
+                <Route path="/oauth/consent" element={<PrivacyGate><OAuthConsent /></PrivacyGate>} />
+              )}
 
               {/* Portal biura - chroniony, pod /biuro/* */}
               <Route path="/biuro" element={<ProtectedRoute />}>
@@ -107,12 +111,14 @@ export default function App() {
                   {/* Integracje: każda rola; kafelki według roli. */}
                   <Route path="admin/integracje" element={<AdminIntegracjeIndex />} />
 
-                  {/* Konfiguracja MCP: Poseł/Administrator + Pracownik (nie Asystent) */}
-                  <Route element={<RoleGuard allow={['posel', 'administrator', 'pracownik']} />}>
-                    <Route element={<DesktopOnlyRoute />}>
-                      <Route path="admin/integracje/mcp" element={<AdminIntegracje />} />
+                  {/* Konfiguracja MCP: Poseł/Administrator + Pracownik (nie Asystent); tylko z włączonym AI */}
+                  {INSTANCE.ai && (
+                    <Route element={<RoleGuard allow={['posel', 'administrator', 'pracownik']} />}>
+                      <Route element={<DesktopOnlyRoute />}>
+                        <Route path="admin/integracje/mcp" element={<AdminIntegracje />} />
+                      </Route>
                     </Route>
-                  </Route>
+                  )}
 
                   {/* Admin panel: tylko Poseł i Administrator */}
                   <Route element={<RoleGuard allow={['posel', 'administrator']} />}>
@@ -129,7 +135,7 @@ export default function App() {
                         element={<AdminIntegracjeGetResponse />}
                       />
                       <Route path="admin/integracje/ics" element={<AdminIntegracjeIcs />} />
-                      <Route path="admin/integracje/ai" element={<AdminIntegracjeAi />} />
+                      {INSTANCE.ai && <Route path="admin/integracje/ai" element={<AdminIntegracjeAi />} />}
                       <Route path="admin/integracje/powiadomienia" element={<AdminIntegracjePowiadomienia />} />
                     </Route>
                   </Route>

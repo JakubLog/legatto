@@ -49,6 +49,14 @@ export const PRO_AUTH_CONFIG = {
 /** Sekrety Edge Functions wymagane na każdej instancji (`.env.example`, sekcja Edge Functions). */
 export const REQUIRED_EDGE_SECRETS = ['ALLOWED_ORIGINS', 'AUTH_REDIRECT_URL', 'TURNSTILE_SECRET', 'PUBLIC_SUBMISSION_IP_SALT'];
 
+/** Edge Functions usunięte z repo; wdrożona pozostałość to FAIL w doctor.mjs (`supabase functions delete <slug>`). */
+export const RETIRED_EDGE_FUNCTIONS = ['ai-proxy'];
+
+/** Dane instancji muszą zostać w UE (region projektu Supabase `eu-*`). */
+export function isEuRegion(region) {
+  return String(region ?? '').startsWith('eu-');
+}
+
 /** Jedyne tabele czytelne dla `anon` (słowniki strony publicznej). */
 export const ANON_READABLE_TABLES = ['offices', 'powiaty', 'gminy', 'case_categories'];
 
@@ -71,7 +79,7 @@ export function parseDomain(value) {
 export function edgeFunctionSlugs() {
   return fs
     .readdirSync(path.join(REPO_ROOT, 'supabase/functions'), { withFileTypes: true })
-    .filter((d) => d.isDirectory() && !d.name.startsWith('_'))
+    .filter((d) => d.isDirectory() && !d.name.startsWith('_') && !RETIRED_EDGE_FUNCTIONS.includes(d.name))
     .map((d) => d.name)
     .sort();
 }

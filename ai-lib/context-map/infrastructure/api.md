@@ -2,11 +2,11 @@
 
 ## Supabase Edge Functions
 
-**Wspólne (`supabase/functions/_shared/auth.ts`):** funkcje działają na service_role, więc RLS (`is_aal2()` w politykach) ich nie chroni. Funkcje admina, `ai-proxy` i `getresponse-proxy` po sprawdzeniu roli wymagają jawnie sesji aal2 (`isCallerAal2` → RPC `is_aal2`, błąd = odmowa, fail-closed; 403 "Wymagane uwierzytelnienie dwuskładnikowe (2FA)"), walidują `user_id` regexem `UUID_RE` i audytują przez `serviceAudit` → RPC `service_log_audit` (aktor = wywołujący; `log_audit` nie jest wykonywalne przez authenticated).
+**Wspólne (`supabase/functions/_shared/auth.ts`):** funkcje działają na service_role, więc RLS (`is_aal2()` w politykach) ich nie chroni. Funkcje admina i `getresponse-proxy` po sprawdzeniu roli wymagają jawnie sesji aal2 (`isCallerAal2` → RPC `is_aal2`, błąd = odmowa, fail-closed; 403 "Wymagane uwierzytelnienie dwuskładnikowe (2FA)"), walidują `user_id` regexem `UUID_RE` i audytują przez `serviceAudit` → RPC `service_log_audit` (aktor = wywołujący; `log_audit` nie jest wykonywalne przez authenticated).
 
 **Konto Posła (od migracji `20261110150000_edge_auth_hardening`):** konto z rolą `posel` tworzy, usuwa, (de)aktywuje, degraduje, resetuje mu 2FA, wylogowuje i wysyła mu link tylko inny **Poseł** - Administrator dostaje 403 (`isCallerPoselRole` + `POSEL_ONLY_MESSAGE` w `_shared/auth.ts`; rola wywołującego z `profiles`, bo `is_posel()` obejmuje też administratora). Ścieżkę klienta (UPDATE/INSERT `profiles` z panelu) pilnuje trigger `profiles_guard_role_active` (BEFORE INSERT/UPDATE OF role, is_active/DELETE; 42501). Ochrona ostatniego Posła (23514) liczy tylko prawdziwe konta: aktywny `posel` z `password_set = true` i zweryfikowanym faktorem TOTP (`service_other_real_posel_exists(p_exclude)`, service_role) - nieprzyjęte zaproszenie Posła się nie liczy.
 
-**Zależności (EDGE-8):** każda funkcja ma własny `deno.json` (mapa importów: `@supabase/supabase-js` → `npm:@supabase/supabase-js@2.45.4`, w `ai-proxy` też `zod` → `npm:zod@3.23.8`; `"lock": {"frozen": true}`) i `deno.lock` w wersji **4** (integralność także zależności pośrednich). CLI `supabase functions deploy` bierze `deno.json` z katalogu funkcji, a bundler edge-runtime (Deno 2.1.4) odrzuca paczkę o innej sumie niż w locku. Lock v5 (Deno ≥ 2.3) psuje deploy ("Unsupported lockfile version '5'") - lock regenerować tylko Deno 2.1.x: `cd supabase/functions/<fn> && deno cache --frozen=false --lock=deno.lock index.ts`. Nowa zależność = wpis w `deno.json` + regeneracja locka; bez importów `https://esm.sh/...`.
+**Zależności (EDGE-8):** każda funkcja ma własny `deno.json` (mapa importów: `@supabase/supabase-js` → `npm:@supabase/supabase-js@2.45.4`; `"lock": {"frozen": true}`) i `deno.lock` w wersji **4** (integralność także zależności pośrednich). CLI `supabase functions deploy` bierze `deno.json` z katalogu funkcji, a bundler edge-runtime (Deno 2.1.4) odrzuca paczkę o innej sumie niż w locku. Lock v5 (Deno ≥ 2.3) psuje deploy ("Unsupported lockfile version '5'") - lock regenerować tylko Deno 2.1.x: `cd supabase/functions/<fn> && deno cache --frozen=false --lock=deno.lock index.ts`. Nowa zależność = wpis w `deno.json` + regeneracja locka; bez importów `https://esm.sh/...`.
 
 ### public-submit-case
 **Endpoint:** `POST /functions/v1/public-submit-case`
@@ -51,18 +51,16 @@
 
 **Frontend:** widget `src/components/public/TurnstileWidget.tsx`, klucz witryny `TURNSTILE_KEY` (Vercel env). CSP w `vercel.json` dopuszcza `https://challenges.cloudflare.com`.
 
-**CORS:** `corsHeadersFor(req)` (whitelist: produkcja + localhost)
+**CORS:** `corsHeadersFor(req)` (whitelist z `ALLOWED_ORIGINS`; bez sekretu tylko localhost:8080/3000 - dev)
 
-### ai-proxy
-**Endpoint:** `POST /functions/v1/ai-proxy`
-**Auth:** Bearer (zalogowany writer: Poseł/Pracownik, sesja aal2). Brak ścieżki service_role (usunięta - nikt jej nie wołał, omijała aal2, limit i audyt).
-**Klucz AI:** `anthropic_api_key` w Supabase Vault + `app_settings.ai_model`. Klucz niedostępny dla klientów (zapis RPC `set_secret_setting`, status `get_secret_settings_status`), Edge Function czyta go przez service_role RPC `service_get_secrets`. Klucz API instancji (Claude Console) wpisuje Poseł w ustawieniach integracji.
-**Akcje (`{ action, payload? }`):**
-- `status` (writer) → `{ configured, model }` - bez ruchu do Anthropic
-- `check_connection` (Poseł) → `GET /v1/models`; `{ ok: true, model, model_available, models[] }` albo `{ ok: false, status, code, error }`
-- `run_task` (writer) → `{ task, input }` → `{ text, model }`. Rejestr zadań jest obecnie pusty po przeniesieniu interpelacji do MCP.
-**Errors:** 400 (zła akcja/zadanie/wejście), 401, 403, 409 `AI_NOT_CONFIGURED`, 502 z `code`: `AI_KEY_INVALID`, `AI_KEY_FORBIDDEN`, `AI_NO_CREDITS`, `AI_MODEL_NOT_FOUND`, `AI_RATE_LIMIT`, `AI_UPSTREAM`, `AI_EMPTY`; 500.
-**Nowa funkcja AI:** wpis w `supabase/functions/ai-proxy/tasks.ts` i dedykowany, typowany hook w kliencie.
+### device-login
+**Endpoint:** `POST /functions/v1/device-login`
+**Auth:** brak sesji (klucz anon); dowód = podpis kluczem zaufanego komputera (`trusted_devices`)
+**Body:** `{ op: 'challenge', device_id }` → `{ challenge }`; `{ op: 'login', device_id, signature, pin }` → `{ token_hash }`; `{ op: 'forget', device_id, signature }` → `{ success: true }`
+**Podpis:** ECDSA P-256 / SHA-256 (IEEE P1363, base64url) tekstu `legatto-trusted-device|<op>|<device_id>|<challenge>`; wyzwanie jednorazowe, 60 s, zużywane także przy błędzie.
+**Login:** konto aktywne, `password_set`, zweryfikowany TOTP, `has_privacy_pin` → `privacy_pin_attempt` (blokada PIN-u) → `auth.admin.generateLink({ type: 'magiclink' })` bez wysyłki maila; klient od razu zużywa `token_hash` w `verifyOtp` (sesja aal1, dalej kod 2FA). Audit `trusted_device.login` / `trusted_device.forget`.
+**Errors:** `{ error, code }`: 400 `bad_request`, 401 `unknown_device` / `bad_pin`, 403 `account_unavailable`, 409 `pin_not_set`, 423 `pin_locked`, 500 `server_error`.
+**Klient:** `src/lib/trustedDevice.ts` (`signInWithTrustedDevice`, `forgetRememberedProfile`).
 
 ### admin-delete-user
 **Endpoint:** `POST /functions/v1/admin-delete-user`
@@ -204,13 +202,14 @@
 ## Vercel Serverless Functions
 
 - `/api/mcp` - serwer MCP (opis: [features/mcp-integration.md](../features/mcp-integration.md)). Batch JSON-RPC max 10 elementów, body max 1 MB.
-- `/api/oauth/authorize`, `/api/oauth/code`, `/api/oauth/token`, `/.well-known/oauth-authorization-server` (rewrite → `/api/oauth/discovery`) - serwer OAuth 2.0 dla claude.ai (opis w mcp-integration.md).
-- `/api/integracje` - funkcja wielooperacyjna (`?op=`, limit 12 funkcji Vercel Hobby): `ics_sync` (Poseł, sesja aal2 - `isAal2Session` z `api/_lib/jwt.ts`; dawniej `/api/sync-ics`). `/api/cron/sync-ics` (`CRON_SECRET`, tylko źródła z `is_active = true`). Pobieranie ICS przez `api/_lib/safe-fetch.ts`.
-- Crony: jedna funkcja `api/cron/[job].ts` (`CRON_SECRET`) dla `/api/cron/sync-ics` (`api/_lib/cron/syncIcs.ts`), `/api/cron/poliai-purge` (`api/_lib/cron/purge.ts`; także sieroty `signing-documents` i pliki anulowanych dokumentów po 30 dniach) i `/api/cron/notifications` (`api/_lib/cron/notifications.ts`) - limit 12 funkcji Vercel Hobby.
+- `/api/oauth/authorize`, `/api/oauth/code`, `/api/oauth/token`, `/.well-known/oauth-authorization-server` (rewrite → `/api/oauth/discovery`) - serwer OAuth 2.0 dla claude.ai (opis w mcp-integration.md). Tylko przy `INSTANCE_AI=on` (inaczej 404 `AI_DISABLED`).
+- `/api/integracje` - funkcja wielooperacyjna (`?op=`, limit 12 funkcji Vercel Hobby): `ics_sync` (Poseł, sesja aal2 - `isAal2Session` z `api/_lib/jwt.ts`; dawniej `/api/sync-ics`), `interpellation_submit` `{recipient, subject, html, case_id?}` i `interpellation_resubmit` `{id, html, recipient?, subject?}` (Pracownik, aal2; ręczne wgranie bez AI - `submitInterpellation` / `resubmitInterpellation` z `api/_lib/tools/interpellations.ts`, ta sama walidacja i sanityzacja HTML co MCP; audyt kanału `portal` przez `service_log_audit`: przed operacją `portal.interpellation_request` fail-closed (503), po niej `portal.interpellation_submit|resubmit`; błędy walidacji 400 `bledne_dane` (w tym niezmieniona treść poprawki i zły UUID), zły status 409 `zly_status`). `/api/cron/sync-ics` (`CRON_SECRET`, tylko źródła z `is_active = true`). Pobieranie ICS przez `api/_lib/safe-fetch.ts`.
+- Crony: jedna funkcja `api/cron/[job].ts` (`CRON_SECRET`; brak sekretu = 503 i błąd w logu, zły = 401) dla `/api/cron/sync-ics` (`api/_lib/cron/syncIcs.ts`), `/api/cron/poliai-purge` (`api/_lib/cron/purge.ts`; także sieroty `signing-documents` i pliki anulowanych dokumentów po 30 dniach) i `/api/cron/notifications` (`api/_lib/cron/notifications.ts`) - limit 12 funkcji Vercel Hobby.
 - `/api/notifications` - powiadomienia e-mail (Resend) i web push: `status`, `test`, `admin_status`, `admin_save` (sesja aal2), `dispatch` (token z `notification_server_config`, wołane przez pg_net). Opis: [features/powiadomienia.md](../features/powiadomienia.md).
 - `api/_lib/jwt.ts` - `isAal2Session(jwt, userId)`: odczyt claimu `aal` (i zgodności `sub`) z JWT; wołać wyłącznie po `auth.getUser(jwt)`, który waliduje podpis.
 - `api/_lib/safe-fetch.ts` - `safeFetch(url, opts)`: ochrona SSRF - tylko http/https, blokada adresów loopback/prywatnych/link-local/zastrzeżonych/metadanych chmury (IPv4, IPv6, IPv4 osadzone w IPv6), walidacja w `lookup` gniazda (połączenie przypięte do zwalidowanego adresu, brak DNS rebinding), ponowna walidacja każdego redirectu, limit czasu i rozmiaru (ICS: 5 MB).
-- `/api/poliai` - PoliAI (strumień SSE) oraz operacje `?op=attachment` (przygotowanie załącznika) i `?op=budget-report` (raport AI budżetu za miesiąc: body `{month}`, odpowiedź `{report}`, kody `AI_NOT_CONFIGURED` 409, `BUDGET_REPORT_EMPTY` 422, `BUDGET_REPORT_LIMIT` 429, `BUDGET_REPORT_INVALID` 502; `api/_lib/poliai/budget-report.ts`).
+- `/api/poliai` - PoliAI (strumień SSE) oraz operacje `?op=attachment` (przygotowanie załącznika), `?op=budget-report` (raport AI budżetu za miesiąc: body `{month}`, odpowiedź `{report}`, kody `AI_NOT_CONFIGURED` 409, `BUDGET_REPORT_EMPTY` 422, `BUDGET_REPORT_LIMIT` 429, `BUDGET_REPORT_INVALID` 502; `api/_lib/poliai/budget-report.ts`) i `?op=connection` (Poseł/Administrator: `GET /v1/models` Anthropic; `{ ok: true, model, model_available, models[], operator_managed: {key, model} }` albo HTTP 200 `{ ok: false, status, code, error, operator_managed }` z kodami `AI_NOT_CONFIGURED`, `AI_KEY_INVALID`, `AI_KEY_FORBIDDEN`, `AI_NO_CREDITS`, `AI_RATE_LIMIT`, `AI_UPSTREAM`; dawniej Edge `ai-proxy`, usunięta).
+- **Bramka AI (ADR 028):** przy `INSTANCE_AI` innym niż `on` wszystkie operacje `/api/poliai`, `/api/mcp`, `/api/oauth/*` i discovery zwracają 404 `{ error, code: 'AI_DISABLED' }` przed sesją, bazą i sekretami (`rejectIfAiDisabled` z `api/_lib/instance.ts`; druga linia: `requireAiSettings`). Klucz i modele: `AI_API_KEY` / `AI_MODEL` / `AI_FAST_MODEL` z env mają pierwszeństwo przed Vault (`anthropic_api_key`) i `app_settings.ai_model`; przy `AI_API_KEY` bez `AI_MODEL` model jest domyślny (panel go nie zmienia - koszt operatora); domyślnie `claude-sonnet-4-6` / `claude-haiku-5-5`.
 
 ## React Query - query keys
 
@@ -282,8 +281,9 @@
 | `useDecideInterpellation()` | decyzja Posła: akceptacja, uwagi albo odrzucenie | `src/hooks/useInterpellations.ts` |
 | `useMarkInterpellationSent()` | potwierdzenie wysłania zaakceptowanej interpelacji | `src/hooks/useInterpellations.ts` |
 | `useDeleteInterpellation()` | mutation delete (Poseł/Administrator) | `src/hooks/useInterpellations.ts` |
-| `useAiConnection(enabled?)` | weryfikacja klucza + lista modeli (Poseł/Administrator) | `src/hooks/useAi.ts` |
-| `useAiSettings()` / `useUpdateAiSettings()` | model AI w `app_settings` (Poseł); klucz API zapisywany przez `saveSecretSetting('anthropic_api_key', …)` | `src/hooks/useAi.ts` |
+| `useAiConnection()` | `POST /api/poliai?op=connection`: weryfikacja klucza + lista modeli + `operator_managed` (Poseł/Administrator) | `src/hooks/useAi.ts` |
+| `useAiSettings()` / `useUpdateAiSettings()` | model AI w `app_settings` (Poseł; pomijany przy kluczu albo modelu operatora); klucz API zapisywany przez `saveSecretSetting('anthropic_api_key', …)` (formularz ukryty przy `AI_API_KEY` operatora) | `src/hooks/useAi.ts` |
+| `useSubmitInterpellation()` / `useResubmitInterpellation()` | ręczne wgranie interpelacji / poprawki po uwagach (Pracownik, `POST /api/integracje?op=interpellation_submit|interpellation_resubmit`) | `src/hooks/useInterpellations.ts` |
 | `useSecretSettingsStatus()` / `saveSecretSetting(key, value)` | status kluczy API (`get_secret_settings_status`: `configured` + końcówka) / zapis (`set_secret_setting`; pusty = usunięcie). Klucze nigdy nie trafiają do przeglądarki | `src/hooks/useSecretSettings.ts` |
 | `useSetPrivacyPin()` / `useVerifyPrivacyPin()` / `useClearPrivacyPin()` | RPC PIN-u trybu prywatnego (zmiana i wyłączenie wymagają obecnego PIN-u; `PrivacyPinLockedError` przy blokadzie) | `src/hooks/usePrivacyPin.ts` |
 | `useUpdateMyProfile()` | self-edit (full_name/phone/avatar_url/is_public) — RLS blokuje role/is_active | `src/hooks/useUsers.ts` |
@@ -309,7 +309,7 @@
 pnpm dlx supabase link --project-ref <ref>
 pnpm dlx supabase functions deploy admin-create-user
 pnpm dlx supabase functions deploy admin-delete-user
-pnpm dlx supabase functions deploy ai-proxy
+pnpm dlx supabase functions deploy getresponse-proxy
 pnpm dlx supabase secrets set ALLOWED_ORIGINS=https://<domena instancji> AUTH_REDIRECT_URL=https://<domena instancji>/login
 pnpm dlx supabase secrets set TURNSTILE_SECRET=<secret z Cloudflare Turnstile>
 # ALLOWED_ORIGINS = origin instancji (CORS wszystkich funkcji z _shared/cors.ts)

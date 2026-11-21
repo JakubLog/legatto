@@ -37,8 +37,12 @@ export function isToolAllowed(tool: ToolDefinition, ctx: McpAuthContext): boolea
   return !tool.roles || tool.roles.includes(ctx.userRole);
 }
 
-/** Czy narzedzie istnieje w danym kanale (POLIAI_ONLY ukrywa administracje przed /api/mcp). */
+/**
+ * Czy narzedzie istnieje w danym kanale (POLIAI_ONLY ukrywa administracje przed /api/mcp).
+ * Kanal 'portal' nie wywoluje narzedzi (api/integracje.ts uzywa wspolnych funkcji) - zadne nie jest w nim widoczne.
+ */
 export function isToolExposed(tool: ToolDefinition, channel: ToolChannel): boolean {
+  if (channel === 'portal') return false;
   return !tool.channels || tool.channels.includes(channel);
 }
 

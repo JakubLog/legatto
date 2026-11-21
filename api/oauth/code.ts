@@ -9,12 +9,12 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { randomBytes } from 'node:crypto';
-import { createClient } from '@supabase/supabase-js';
-import { getServiceClient } from '../_lib/supabase.js';
+import { getAnonClient, getServiceClient } from '../_lib/supabase.js';
 import { isAal2Session } from '../_lib/jwt.js';
 import { isMcpRole } from '../_lib/auth.js';
 import { CODE_CHALLENGE_S256_RE, parseRedirectUri, stringParam } from '../_lib/oauth.js';
 import { getSiteIdentity, mpForms } from '../_lib/siteIdentity.js';
+import { rejectIfAiDisabled } from '../_lib/instance.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   return handlerInner(req, res).catch((err) => {
@@ -24,6 +24,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 async function handlerInner(req: VercelRequest, res: VercelResponse) {
+  // OAuth sluzy tylko klientom MCP (Claude) - bez AI na instancji nie istnieje.
+  if (rejectIfAiDisabled(res)) return;
   // Bez CORS: wolany tylko z SPA na tym samym originie (sesja Supabase), obce strony nie czytaja odpowiedzi.
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' });
 
@@ -35,11 +37,7 @@ async function handlerInner(req: VercelRequest, res: VercelResponse) {
   }
   const sessionToken = match[1];
 
-  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? '';
-  const anonKey = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY ?? '';
-  const userClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false } });
-
-  const { data: { user }, error: userErr } = await userClient.auth.getUser(sessionToken);
+  const { data: { user }, error: userErr } = await getAnonClient().auth.getUser(sessionToken);
   if (userErr || !user) {
     return res.status(401).json({ error: 'unauthorized', error_description: 'Nieprawidłowa sesja' });
   }
