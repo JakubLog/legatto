@@ -1,4 +1,5 @@
 import { getServiceClient } from '../supabase.js';
+import { DbError } from '../log-safe.js';
 import { SECRET_KEYS } from './settings.js';
 import {
   type ToolDefinition,
@@ -59,7 +60,7 @@ export const auditTools: ToolDefinition[] = [
       if (userEmail) q = q.ilike('user_email', `%${userEmail}%`);
 
       const { data, error } = await q;
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       const entries = (data ?? []).map(redactSecretSetting).map(markAuditEntry);
       return jsonResult({ count: entries.length, entries });
     },

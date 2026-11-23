@@ -11,6 +11,7 @@ import { randomBytes } from 'node:crypto';
 import webpush from 'web-push';
 import { configuredInstanceOrigin } from '../issuer.js';
 import { getServiceClient } from '../supabase.js';
+import { DbError } from '../log-safe.js';
 
 export const SETTINGS_KEY = 'notifications_settings';
 export const RESEND_KEY = 'resend_api_key';
@@ -103,14 +104,14 @@ export async function loadSettings(): Promise<NotificationsSettings> {
     .select('value')
     .eq('key', SETTINGS_KEY)
     .maybeSingle();
-  if (error) throw new Error(`app_settings: ${error.message}`);
+  if (error) throw new DbError(error, 'app_settings');
   const settings = parseSettings(data?.value);
   return { ...settings, app_url: instanceOrigin() ?? settings.app_url };
 }
 
 export async function loadResendKey(): Promise<string> {
   const { data, error } = await getServiceClient().rpc('service_get_secrets', { p_keys: [RESEND_KEY] });
-  if (error) throw new Error(`service_get_secrets: ${error.message}`);
+  if (error) throw new DbError(error, 'service_get_secrets');
   const row = ((data ?? []) as { key: string; value: string }[]).find((r) => r.key === RESEND_KEY);
   return row?.value.trim() ?? '';
 }
@@ -206,7 +207,7 @@ export async function loadServerConfig(): Promise<ServerConfigRow | null> {
     .select('dispatch_url, dispatch_token, vapid_public_key')
     .eq('id', true)
     .maybeSingle();
-  if (error) throw new Error(`notification_server_config: ${error.message}`);
+  if (error) throw new DbError(error, 'notification_server_config');
   return (data as ServerConfigRow | null) ?? null;
 }
 
@@ -226,7 +227,7 @@ export async function ensureVapidKeys(): Promise<VapidKeys> {
     loadServerConfig(),
     supabase.rpc('service_get_secrets', { p_keys: ['vapid_private_key'] }),
   ]);
-  if (secretsRes.error) throw new Error(`service_get_secrets: ${secretsRes.error.message}`);
+  if (secretsRes.error) throw new DbError(secretsRes.error, 'service_get_secrets');
   const privateKey = ((secretsRes.data ?? []) as { key: string; value: string }[]).find(
     (r) => r.key === 'vapid_private_key',
   )?.value;
@@ -237,7 +238,7 @@ export async function ensureVapidKeys(): Promise<VapidKeys> {
   const { data, error } = await supabase
     .rpc('service_store_vapid_keys', { p_public_key: generated.publicKey, p_private_key: generated.privateKey })
     .maybeSingle();
-  if (error) throw new Error(`service_store_vapid_keys: ${error.message}`);
+  if (error) throw new DbError(error, 'service_store_vapid_keys');
   const saved = data as { public_key: string | null; private_key: string | null } | null;
   if (!saved?.public_key || !saved.private_key) throw new Error('Nie udało się zapisać kluczy VAPID');
   return { publicKey: saved.public_key, privateKey: saved.private_key };
@@ -281,6 +282,6 @@ export async function syncDispatchRegistration(): Promise<boolean> {
       dispatch_token: randomBytes(32).toString('base64url'),
       updated_at: new Date().toISOString(),
     });
-  if (error) throw new Error(`notification_server_config: ${error.message}`);
+  if (error) throw new DbError(error, 'notification_server_config');
   return true;
 }

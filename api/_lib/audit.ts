@@ -1,4 +1,5 @@
 import { getServiceClient } from './supabase.js';
+import { errorSummary } from './log-safe.js';
 import type { McpAuthContext } from './auth.js';
 
 /** Metadane wpisu audytu MCP/PoliAI: przekazane pola + token_id i kanal wywolania. */
@@ -32,7 +33,7 @@ export async function logAudit(
     p_metadata: auditMetadata(ctx, options.metadata),
   });
   if (error) {
-    console.error('[mcp] audit log error', error);
+    console.error('[mcp] audit log error', errorSummary(error));
     return false;
   }
   return true;

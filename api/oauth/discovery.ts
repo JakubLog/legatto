@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { IssuerError, resolveIssuer } from '../_lib/issuer.js';
-import { rejectIfAiDisabled } from '../_lib/instance.js';
+import { rejectIfMcpDisabled } from '../_lib/instance.js';
 
 // MCP OAuth 2.0 Authorization Server Metadata (RFC 8414)
 // Serwowany pod /.well-known/oauth-authorization-server przez rewrite w vercel.json.
@@ -9,7 +9,7 @@ import { rejectIfAiDisabled } from '../_lib/instance.js';
 export default function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'application/json');
-  if (rejectIfAiDisabled(res)) return;
+  if (rejectIfMcpDisabled(res)) return;
   let issuer: string;
   try {
     issuer = resolveIssuer(req);

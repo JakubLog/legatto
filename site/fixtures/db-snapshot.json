@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-22T08:00:00Z",
+  "public_site_url": "https://jan-kowalski.example",
+  "identity": {
+    "mp_name": "Jan Kowalski",
+    "mp_name_genitive": "Jana Kowalskiego",
+    "mp_title": "Poseł na Sejm RP",
+    "mp_gender": "m",
+    "district_label": "Okręg wyborczy nr 35 - Olsztyn",
+    "website_url": "https://jan-kowalski.example/o-mnie",
+    "photo_url": "https://abcdefgh.supabase.co/storage/v1/object/public/site-assets/homepage/1763740800000.jpg"
+  },
+  "homepage": {
+    "appearance": { "template": "nowoczesny", "brand_color": "#1f6feb" },
+    "seo": { "title": "Biuro Poselskie Jana Kowalskiego", "description": "Sprawy mieszkańców okręgu 35." },
+    "promo": { "enabled": false, "label": "", "name": "", "text": "", "cta": "", "href": "" },
+    "external_links": [{ "label": "O Pośle", "href": "https://jan-kowalski.example/o-mnie" }],
+    "hero": {
+      "kicker": "",
+      "lead": "Pomagamy w sprawach mieszkańców Warmii i Mazur.",
+      "primary_cta": "Zgłoś sprawę",
+      "secondary_cta": "Znajdź biuro"
+    },
+    "sections": [
+      { "id": "offices", "enabled": true },
+      { "id": "calendar", "enabled": true },
+      { "id": "submit", "enabled": true }
+    ],
+    "offices": { "nav_label": "Biura", "title": "Nasze biura", "show_map": true, "map_caption": "Biura w okręgu", "empty_text": "" },
+    "calendar": { "nav_label": "Kalendarz", "title": "Kalendarz", "description": "Spotkania z mieszkańcami." },
+    "submit": {
+      "nav_label": "Zgłoś sprawę",
+      "title": "Masz sprawę? Napisz do nas.",
+      "description": "Formularz trafia prosto do biura.",
+      "steps": [{ "title": "Opisz sprawę", "text": "Co się stało i gdzie." }]
+    },
+    "footer": { "tagline": "Sprawy mieszkańców w jednym miejscu.", "copyright": "" }
+  },
+  "district": { "number": 35, "highlighted_powiat_id": null, "highlighted_gmina_id": null, "highlight_label": "" },
+  "offices": [
+    {
+      "id": "6a1c5a52-0d0e-4a43-9a51-0d3a4b1f0001",
+      "name": "Biuro Poselskie w Olsztynie",
+      "city": "Olsztyn",
+      "address": "ul. Prosta 1",
+      "phone": "+48 89 123 45 67",
+      "email": "biuro@jan-kowalski.example",
+      "is_main": true
+    },
+    {
+      "id": "6a1c5a52-0d0e-4a43-9a51-0d3a4b1f0002",
+      "name": "Biuro w Barczewie",
+      "city": "Barczewo",
+      "address": null,
+      "phone": null,
+      "email": null,
+      "is_main": false
+    }
+  ],
+  "staff": [
+    {
+      "id": "0b7e7a4e-5a1f-4c8e-8d55-000000000001",
+      "office_id": "6a1c5a52-0d0e-4a43-9a51-0d3a4b1f0001",
+      "full_name": "Anna Nowak",
+      "role": "pracownik",
+      "phone": "+48 600 100 200",
+      "avatar_url": "https://abcdefgh.supabase.co/storage/v1/object/public/avatars/0b7e7a4e/avatar.png"
+    },
+    {
+      "id": "0b7e7a4e-5a1f-4c8e-8d55-000000000002",
+      "office_id": "6a1c5a52-0d0e-4a43-9a51-0d3a4b1f0001",
+      "full_name": "Piotr Wiśniewski",
+      "role": "asystent",
+      "phone": null,
+      "avatar_url": "https://tracker.example.net/avatar.png"
+    }
+  ],
+  "events": [
+    {
+      "id": "3c0e8f0e-1111-4f6a-9d6e-000000000001",
+      "title": "Dyżur w Olsztynie",
+      "description": "Spotkanie z mieszkańcami.",
+      "type": "spotkanie",
+      "starts_at": "2026-11-25T15:00:00+00:00",
+      "ends_at": "2026-11-25T17:00:00+00:00",
+      "all_day": false,
+      "location": "ul. Prosta 1",
+      "powiat_name": "Olsztyn",
+      "gmina_name": "Olsztyn"
+    }
+  ],
+  "dictionaries": {
+    "powiaty": [
+      { "id": 1, "name": "Olsztyn", "is_city": true, "lat": 53.78, "lng": 20.49 },
+      { "id": 2, "name": "olsztyński", "is_city": false, "lat": 53.8, "lng": 20.5 }
+    ],
+    "gminy": [
+      { "id": 1, "powiat_id": 1, "name": "Olsztyn", "type": "miejska" },
+      { "id": 2, "powiat_id": 2, "name": "Barczewo", "type": "miejsko-wiejska" }
+    ],
+    "categories": [
+      { "id": 1, "name": "Drogi i transport", "slug": "drogi", "color": "#888888" },
+      { "id": 2, "name": "Zdrowie", "slug": "zdrowie", "color": null }
+    ]
+  },
+  "posts": [
+    {
+      "slug": "pierwszy-wpis",
+      "title": "Pierwszy wpis",
+      "excerpt": "Krótko o tym, co robimy.",
+      "body_md": "## Nagłówek\n\nTreść z **pogrubieniem** i [linkiem](https://sejm.gov.pl).\n\n![Zdjęcie z dyżuru](https://abcdefgh.supabase.co/storage/v1/object/public/site-assets/blog/1763740800001.jpg)\n\n![Obcy obraz](https://tracker.example.net/pixel.gif)\n\n<script>alert(1)</script>\n\n| a | b |\n|---|---|\n| 1 | 2 |\n",
+      "cover_path": "blog/1763740800002.png",
+      "published_at": "2026-11-20T10:00:00+00:00",
+      "updated_at": "2026-11-20T10:00:00+00:00"
+    }
+  ],
+  "newsletters": [
+    {
+      "slug": "AbCdEfGhIjKlMnOp",
+      "subject": "Newsletter listopad",
+      "html_web": "<!DOCTYPE html><html><head><style>@font-face { font-family: 'Source Sans 3'; src: url('/fonts/newsletter/source-sans-3-latin-wght-normal.woff2') format('woff2'); }</style></head><body><img src=\"https://jan-kowalski.example/n/a/1111111111111111111111111111111111111111111111111111111111111111.png\" alt=\"Temat\" width=\"560\"><img src=\"https://tracker.example.net/open.gif\" alt=\"\"><td background=\"https://tracker.example.net/bg.png\">x</td><p>Treść</p></body></html>",
+      "published_at": "2026-11-21T09:00:00+00:00"
+    }
+  ],
+  "newsletter_assets": [
+    {
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "ext": "png",
+      "path": "0b7e7a4e/1111111111111111111111111111111111111111111111111111111111111111.png"
+    }
+  ]
+}

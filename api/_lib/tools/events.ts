@@ -1,4 +1,5 @@
 import { getServiceClient } from '../supabase.js';
+import { DbError } from '../log-safe.js';
 import { logAudit } from '../audit.js';
 import { applyDataScope } from '../access.js';
 import {
@@ -80,7 +81,7 @@ export const eventsTools: ToolDefinition[] = [
       if (type) q = q.eq('type', type);
 
       const { data, error } = await q;
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       const events = (await withLabels(data ?? [], EVENT_LABELS)).map(markEvent);
       return jsonResult({ from, to, count: events.length, events });
     },
@@ -137,7 +138,7 @@ export const eventsTools: ToolDefinition[] = [
       };
 
       const { data, error } = await supabase.from('events').insert(insert).select().single();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       await logAudit(ctx, 'mcp.event_create', {
         entityType: 'event',
         entityId: data.id,
@@ -192,7 +193,7 @@ export const eventsTools: ToolDefinition[] = [
       // zatwierdza uzytkownik w panelu aplikacji. Publikacje (is_public) przelacza tylko formularz w UI.
       if (ctx.channel === 'mcp') query = query.eq('is_public', false);
       const { data, error } = await applyDataScope(query, ctx, 'events').select().maybeSingle();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       if (!data) {
         return textResult(
           ctx.channel === 'mcp'
@@ -226,7 +227,7 @@ export const eventsTools: ToolDefinition[] = [
       const id = requireString({ id: args.id }, 'id', 64);
       const supabase = getServiceClient();
       const { error } = await supabase.from('events').delete().eq('id', id);
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       await logAudit(ctx, 'mcp.event_delete', { entityType: 'event', entityId: id, metadata: { tool: 'events_delete' } });
       return jsonResult({ deleted: true, id });
     },

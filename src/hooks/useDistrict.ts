@@ -5,8 +5,8 @@ import { supabase } from '@/integrations/supabase/client';
 
 // Okręg wyborczy instancji (jedna instancja = jeden poseł = jeden okręg).
 // Konfiguracja: app_settings.district = { number, highlighted_powiat_id, highlighted_gmina_id, highlight_label }.
-// Odczyt: RPC get_public_district() - dostępne dla anon (SECURITY DEFINER, zwraca tylko ten klucz),
-// bo mapę biur pokazuje też publiczna strona główna. Migracja 20261107110000_district_settings.sql.
+// Odczyt w CRM: RPC get_public_district() (SECURITY DEFINER, tylko ten klucz; zalogowani). Strona
+// publiczna bierze okręg z migawki (usePublicSite / site/). Migracja 20261107110000_district_settings.sql.
 // Granice: public/geo/okreg-<number>-{powiaty,gminy}.geojson ze scripts/build-okreg-geojson.mjs;
 // słowniki powiaty/gminy w bazie muszą mieć te same id (seed z tego samego skryptu).
 

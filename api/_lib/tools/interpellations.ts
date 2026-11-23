@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { convert } from 'html-to-text';
 import type { McpAuthContext, McpRole } from '../auth.js';
 import { getServiceClient } from '../supabase.js';
+import { DbError } from '../log-safe.js';
 import { sanitizeHtml } from '../sanitize-html.js';
 import { logAudit } from '../audit.js';
 import { applyDataScope } from '../access.js';
@@ -81,7 +82,7 @@ async function resolveSignatory(
   if (requestedId) query = query.eq('id', requestedId);
 
   const { data, error } = await query.maybeSingle();
-  if (error) throw new Error(error.message);
+  if (error) throw new DbError(error);
   if (!data) {
     throw new ToolValidationError(
       requestedId
@@ -103,7 +104,7 @@ async function verifyCaseAccess(
     ctx,
     'cases',
   ).maybeSingle();
-  if (error) throw new Error(error.message);
+  if (error) throw new DbError(error);
   if (!data) {
     throw new ToolValidationError(
       `Sprawa case_id=${caseId} nie istnieje albo jest poza Twoim zakresem danych.`,
@@ -150,7 +151,7 @@ export async function submitInterpellation(
     })
     .select()
     .single();
-  if (error) throw new Error(error.message);
+  if (error) throw new DbError(error);
 
   await logAudit(ctx, auditAction, {
     entityType: 'interpellation',
@@ -202,7 +203,7 @@ export async function resubmitInterpellation(
     if (error.code === '22023') {
       throw new ToolValidationError('Poprawiona wersja musi różnić się treścią od poprzedniej.');
     }
-    throw new Error(error.message);
+    throw new DbError(error);
   }
   if (!data) return null;
 
@@ -302,11 +303,11 @@ export const interpellationsTools: ToolDefinition[] = [
         Promise.all(statusQueries),
         overdueQuery,
       ]);
-      if (pageResult.error) throw new Error(pageResult.error.message);
+      if (pageResult.error) throw new DbError(pageResult.error);
       for (const result of statusResults) {
-        if (result.error) throw new Error(result.error.message);
+        if (result.error) throw new DbError(result.error);
       }
-      if (overdueResult.error) throw new Error(overdueResult.error.message);
+      if (overdueResult.error) throw new DbError(overdueResult.error);
 
       const interpellations = (await withLabels(pageResult.data ?? [], INTERPELLATION_LABELS)).map((item) => ({
         ...item,
@@ -351,7 +352,7 @@ export const interpellationsTools: ToolDefinition[] = [
         ctx,
         'interpellations',
       ).maybeSingle();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       if (!data) {
         return textResult(`Interpelacja o id=${id} nie istnieje lub jest poza Twoim zakresem danych.`, true);
       }
@@ -520,7 +521,7 @@ export const interpellationsTools: ToolDefinition[] = [
         ctx,
         'interpellations',
       ).maybeSingle();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       if (!data) {
         return textResult(
           `Interpelacja o id=${id} nie istnieje albo nie oczekuje na decyzje.`,
@@ -561,7 +562,7 @@ export const interpellationsTools: ToolDefinition[] = [
         ctx,
         'interpellations',
       ).maybeSingle();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       if (!data) {
         return textResult(
           `Interpelacja o id=${id} nie istnieje, nie jest zaakceptowana albo jest poza Twoim zakresem danych.`,
@@ -598,7 +599,7 @@ export const interpellationsTools: ToolDefinition[] = [
         ctx,
         'interpellations',
       ).maybeSingle();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       if (!data) return textResult(`Interpelacja o id=${id} nie istnieje.`, true);
 
       await logAudit(ctx, 'mcp.interpellation_delete', {

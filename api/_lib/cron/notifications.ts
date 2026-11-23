@@ -5,6 +5,7 @@
 // INSTANCE_EMAIL=off: kolejka idzie dalej (push), e-maile dostają email_status 'skipped'
 // w dispatchPending/loadDispatchContext - bez zapytań do Resend.
 import { getServiceClient } from '../supabase.js';
+import { errorSummary } from '../log-safe.js';
 import { dispatchPending } from '../notifications/dispatch.js';
 import { syncDispatchRegistration } from '../notifications/settings.js';
 import type { CronJobResult } from './types.js';
@@ -12,15 +13,15 @@ import type { CronJobResult } from './types.js';
 export async function runNotifications(): Promise<CronJobResult> {
   const startedAt = Date.now();
   await syncDispatchRegistration().catch((err: unknown) => {
-    console.error('[cron notifications] dispatch registration error', err instanceof Error ? err.message : err);
+    console.error('[cron notifications] dispatch registration error', errorSummary(err));
   });
   const { data: enqueued, error } = await getServiceClient().rpc('notifications_enqueue_daily', { p_today: null });
-  if (error) console.error('[cron notifications] enqueue error', error.code, error.message);
+  if (error) console.error('[cron notifications] enqueue error', errorSummary(error));
   try {
     const dispatched = await dispatchPending(startedAt + 100_000);
     return { status: error ? 500 : 200, body: { enqueued: error ? null : enqueued, dispatched } };
   } catch (err) {
-    console.error('[cron notifications] dispatch error', err instanceof Error ? err.message : err);
+    console.error('[cron notifications] dispatch error', errorSummary(err));
     return { status: 500, body: { enqueued: error ? null : enqueued, error: 'Dispatch failed' } };
   }
 }

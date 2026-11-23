@@ -1,0 +1,64 @@
+{
+  "manifest_version": "0.3",
+  "name": "legatto",
+  "display_name": "Legatto – portal biura",
+  "version": "1.0.0",
+  "description": "Łączy Claude Desktop z serwerem MCP portalu biura Legatto (dostępny tylko przez VPN biura).",
+  "long_description": "Rozszerzenie udostępnia w Claude Desktop narzędzia i procedury portalu biura Legatto: sprawy, kontakty, wydarzenia, interpelacje i budżet – w zakresie uprawnień Twojego konta.\n\nSerwer biura jest osiągalny wyłącznie w sieci VPN biura (Tailscale/Headscale). Przed pracą włącz VPN.\n\n**Logowanie:** aplikacja OAuth z portalu biura (Integracje → OAuth Apps) – przy pierwszym użyciu rozszerzenie otworzy przeglądarkę z logowaniem do portalu (z weryfikacją dwuetapową). Zamiast OAuth możesz wpisać token MCP (Integracje → Tokeny MCP).\n\nTokeny są zapisywane wyłącznie na tym komputerze, w pliku dostępnym tylko dla Twojego konta systemowego.",
+  "author": {
+    "name": "Legatto"
+  },
+  "icon": "icon.png",
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.mjs"],
+      "env": {
+        "LEGATTO_OFFICE_URL": "${user_config.office_url}",
+        "LEGATTO_CLIENT_ID": "${user_config.client_id}",
+        "LEGATTO_CLIENT_SECRET": "${user_config.client_secret}",
+        "LEGATTO_MCP_TOKEN": "${user_config.mcp_token}"
+      }
+    }
+  },
+  "tools_generated": true,
+  "prompts_generated": true,
+  "keywords": ["legatto", "biuro poselskie", "crm", "mcp"],
+  "license": "AGPL-3.0-only",
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=20.0.0"
+    }
+  },
+  "user_config": {
+    "office_url": {
+      "type": "string",
+      "title": "Adres portalu biura",
+      "description": "Adres portalu w sieci VPN biura, np. https://app.twojadomena.pl",
+      "required": true
+    },
+    "client_id": {
+      "type": "string",
+      "title": "Client ID (OAuth)",
+      "description": "Client ID aplikacji OAuth z portalu biura (Integracje → OAuth Apps → „Nowa App”). Puste, jeśli używasz tokenu MCP.",
+      "required": false
+    },
+    "client_secret": {
+      "type": "string",
+      "title": "Client Secret (OAuth)",
+      "description": "Client Secret tej samej aplikacji OAuth (widoczny tylko raz po utworzeniu).",
+      "sensitive": true,
+      "required": false
+    },
+    "mcp_token": {
+      "type": "string",
+      "title": "Token MCP (zamiast OAuth)",
+      "description": "Opcjonalnie: token MCP z portalu biura (Integracje → Tokeny MCP, zaczyna się od epm_). Gdy podany, Client ID i Secret są pomijane.",
+      "sensitive": true,
+      "required": false
+    }
+  }
+}

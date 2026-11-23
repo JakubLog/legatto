@@ -28,7 +28,9 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { corsHeadersFor } from '../_shared/cors.ts';
+import { adminSurfaceGuard } from '../_shared/surface.ts';
 import { isCallerAal2, isCallerPoselRole, POSEL_ONLY_MESSAGE, serviceAudit, UUID_RE } from '../_shared/auth.ts';
+import { errorSummary } from '../_shared/log-safe.ts';
 
 const COOLDOWN_SECONDS = 5 * 60;
 const COOLDOWN_ACTIONS = ['user.invite_resent', 'user.password_reset_sent'];
@@ -42,6 +44,9 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: cors });
   }
+  // Na VPS tylko z hosta admin (A5); na crm 404 jak blokada proxy.
+  const surfaceDenied = adminSurfaceGuard(req, cors);
+  if (surfaceDenied) return surfaceDenied;
 
   const json = (body: unknown, status: number) =>
     new Response(JSON.stringify(body), {
@@ -83,7 +88,7 @@ Deno.serve(async (req) => {
 
     const { data: isPoselData, error: roleError } = await callerClient.rpc('is_posel');
     if (roleError) {
-      console.error('is_posel rpc error', roleError);
+      console.error('is_posel rpc error', errorSummary(roleError));
       return json({ error: 'Nie udało się zweryfikować uprawnien' }, 500);
     }
     if (isPoselData !== true) {
@@ -116,7 +121,7 @@ Deno.serve(async (req) => {
       .eq('id', userId)
       .maybeSingle();
     if (targetError) {
-      console.error('profile lookup error', targetError);
+      console.error('profile lookup error', errorSummary(targetError));
       return json({ error: 'Nie udało się pobrać profilu' }, 500);
     }
     if (!target) {
@@ -135,7 +140,7 @@ Deno.serve(async (req) => {
     // Adres konta Auth (profiles.email jest edytowalny i moze sie rozjechac z kontem logowania).
     const { data: authData, error: authLookupError } = await adminClient.auth.admin.getUserById(userId);
     if (authLookupError || !authData?.user) {
-      console.error('getUserById error', authLookupError);
+      console.error('getUserById error', errorSummary(authLookupError));
       return json({ error: 'Nie znaleziono konta logowania użytkownika' }, 404);
     }
     const authEmail = authData.user.email;
@@ -158,7 +163,7 @@ Deno.serve(async (req) => {
       p_cooldown_seconds: COOLDOWN_SECONDS,
     });
     if (claimError || typeof retryAfter !== 'number') {
-      console.error('cooldown claim error', claimError);
+      console.error('cooldown claim error', errorSummary(claimError));
       return json({ error: 'Nie udało się sprawdzić limitu wysyłki' }, 500);
     }
     if (retryAfter > 0) {
@@ -194,13 +199,13 @@ Deno.serve(async (req) => {
       });
       if (inviteError) {
         // Konto juz potwierdzone (GoTrue odrzuca invite) -> magic link bez tworzenia usera.
-        console.error('inviteUserByEmail resend error', inviteError);
+        console.error('inviteUserByEmail resend error', errorSummary(inviteError));
         const { error: magicError } = await publicClient.auth.signInWithOtp({
           email: authEmail,
           options: { shouldCreateUser: false, emailRedirectTo: redirectTo },
         });
         if (magicError) {
-          console.error('signInWithOtp error', magicError);
+          console.error('signInWithOtp error', errorSummary(magicError));
           return await sendFailed('Nie udało się wysłać zaproszenia', magicError);
         }
       }
@@ -209,14 +214,14 @@ Deno.serve(async (req) => {
         redirectTo,
       });
       if (recoveryError) {
-        console.error('resetPasswordForEmail error', recoveryError);
+        console.error('resetPasswordForEmail error', errorSummary(recoveryError));
         return await sendFailed('Nie udało się wysłać linku resetu hasła', recoveryError);
       }
     }
 
     return json({ success: true, kind }, 200);
   } catch (err) {
-    console.error('admin-send-auth-link error', err);
+    console.error('admin-send-auth-link error', errorSummary(err));
     return json({ error: 'Wystąpił nieoczekiwany błąd. Skontaktuj się z administratorem.' }, 500);
   }
 });

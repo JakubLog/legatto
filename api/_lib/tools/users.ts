@@ -1,4 +1,5 @@
 import { getServiceClient } from '../supabase.js';
+import { DbError } from '../log-safe.js';
 import { logAudit } from '../audit.js';
 import { isPoselRole } from '../auth.js';
 import {
@@ -53,14 +54,14 @@ export const usersTools: ToolDefinition[] = [
       if (role) q = q.eq('role', role);
       if (officeId) q = q.eq('office_id', officeId);
       const { data, error } = await q;
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       const users = (data ?? []) as unknown as Array<Record<string, unknown> & { id: string }>;
 
       if (!isPoselRole(ctx.userRole)) return jsonResult({ count: users.length, users });
 
       // last_sign_in_at zyje w auth.users - zespol biura miesci sie w jednej stronie.
       const { data: authData, error: authError } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-      if (authError) throw new Error(authError.message);
+      if (authError) throw new DbError(authError);
       const lastSignIn = new Map(authData.users.map((u) => [u.id, u.last_sign_in_at ?? null]));
       return jsonResult({
         count: users.length,
@@ -89,7 +90,7 @@ export const usersTools: ToolDefinition[] = [
         .select(isPoselRole(ctx.userRole) ? ADMIN_COLUMNS : DIRECTORY_COLUMNS)
         .eq('id', id)
         .maybeSingle();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       if (!profile) return textResult(`Użytkownik o id=${id} nie istnieje.`, true);
       if (!isPoselRole(ctx.userRole)) return jsonResult({ user: profile });
 
@@ -97,8 +98,8 @@ export const usersTools: ToolDefinition[] = [
         supabase.auth.admin.getUserById(id),
         supabase.auth.admin.mfa.listFactors({ userId: id }),
       ]);
-      if (authRes.error) throw new Error(authRes.error.message);
-      if (factorsRes.error) throw new Error(factorsRes.error.message);
+      if (authRes.error) throw new DbError(authRes.error);
+      if (factorsRes.error) throw new DbError(factorsRes.error);
       const factors = factorsRes.data.factors;
       return jsonResult({
         user: profile,
@@ -149,7 +150,7 @@ export const usersTools: ToolDefinition[] = [
         .select('id, role, office_id, is_active')
         .eq('id', id)
         .maybeSingle();
-      if (currentError) throw new Error(currentError.message);
+      if (currentError) throw new DbError(currentError);
       if (!current) return textResult(`Użytkownik o id=${id} nie istnieje.`, true);
 
       const update: Record<string, unknown> = {};
@@ -193,7 +194,7 @@ export const usersTools: ToolDefinition[] = [
           .select('id, is_active')
           .eq('id', update.office_id as string)
           .maybeSingle();
-        if (officeError) throw new Error(officeError.message);
+        if (officeError) throw new DbError(officeError);
         if (!office) throw new ToolValidationError(`Biuro o id=${String(update.office_id)} nie istnieje.`);
         if (!office.is_active) throw new ToolValidationError('Nie można przypisać nieaktywnego biura.');
       }
@@ -208,7 +209,7 @@ export const usersTools: ToolDefinition[] = [
         // Strażnik profiles (trigger): 42501 = własna rola/aktywność, 23514 = ostatni aktywny Poseł.
         // service_role nie ma auth.uid(), więc 42501 łapie tu walidacja wyżej; 23514 działa zawsze.
         if (error.code === '42501' || error.code === '23514') throw new ToolValidationError(error.message);
-        throw new Error(error.message);
+        throw new DbError(error);
       }
       await logAudit(ctx, 'mcp.user_update', {
         entityType: 'profile',

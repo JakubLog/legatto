@@ -1,5 +1,7 @@
 // Klient Resend (REST, bez SDK). RESEND_API_URL nadpisuje adres (testy z atrapą).
-// Każde zapytanie do Resend idzie przez `call` - tam bramka INSTANCE_EMAIL (operator instancji).
+// Każde zapytanie do Resend idzie przez `call` - tam bramka INSTANCE_EMAIL (operator instancji) dla
+// powiadomień. Maile Auth (hook GoTrue → server/auth-email-hook.ts) jej nie podlegają: bez nich nie
+// da się zaprosić użytkownika ani zresetować hasła.
 
 import { z } from 'zod';
 import { instanceFlags } from '../instance.js';
@@ -36,8 +38,18 @@ const DomainsResponse = z
   })
   .loose();
 
-async function call(key: string, method: 'GET' | 'POST', path: string, body?: unknown, idempotencyKey?: string): Promise<unknown> {
-  if (!instanceFlags().email) {
+/** `notifications` - powiadomienia (bramka INSTANCE_EMAIL); `auth` - maile Auth z hooka GoTrue. */
+export type EmailPurpose = 'notifications' | 'auth';
+
+async function call(
+  key: string,
+  method: 'GET' | 'POST',
+  path: string,
+  body?: unknown,
+  idempotencyKey?: string,
+  purpose: EmailPurpose = 'notifications',
+): Promise<unknown> {
+  if (purpose === 'notifications' && !instanceFlags().email) {
     throw new ResendError(409, 'email_disabled', 'Wysyłka e-mail jest wyłączona przez operatora instancji.');
   }
   let res: Response;
@@ -90,7 +102,12 @@ export interface EmailMessage {
 }
 
 /** Wysyła jedną wiadomość; zwraca id Resend. Idempotency-Key chroni przed duplikatem przy ponowieniu. */
-export async function sendEmail(key: string, message: EmailMessage, idempotencyKey: string): Promise<string> {
+export async function sendEmail(
+  key: string,
+  message: EmailMessage,
+  idempotencyKey: string,
+  purpose: EmailPurpose = 'notifications',
+): Promise<string> {
   const json = await call(
     key,
     'POST',
@@ -105,6 +122,7 @@ export async function sendEmail(key: string, message: EmailMessage, idempotencyK
       ...(message.tags?.length ? { tags: message.tags } : {}),
     },
     idempotencyKey,
+    purpose,
   );
   const parsed = SendResponse.safeParse(json);
   return parsed.success ? parsed.data.id : '';

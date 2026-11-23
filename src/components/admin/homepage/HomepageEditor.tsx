@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { useUpdateSiteContent } from '@/hooks/useSiteContent';
+import { usePublicSiteUrl, useSitePublishAction } from '@/hooks/useSitePublish';
 import { homepageSchema, siteIdentitySchema, type SiteContent } from '@/lib/siteContent';
 
 import { AppearanceCard } from './AppearanceCard';
@@ -21,6 +22,8 @@ const siteContentFormSchema = z.object({ identity: siteIdentitySchema, homepage:
 /** Formularz całej treści strony publicznej - jeden zapis obu kluczy app_settings. */
 export function HomepageEditor({ initial }: { initial: SiteContent }) {
   const updateMut = useUpdateSiteContent();
+  const publicSiteUrl = usePublicSiteUrl().data ?? '';
+  const { publish } = useSitePublishAction();
   const form = useForm<SiteContent>({
     resolver: zodResolver(siteContentFormSchema),
     defaultValues: initial,
@@ -36,7 +39,11 @@ export function HomepageEditor({ initial }: { initial: SiteContent }) {
     try {
       await updateMut.mutateAsync(values);
       form.reset(values);
-      toast.success('Strona główna zapisana');
+      // Strona statyczna (VPS): zapis nie zmienia jeszcze strony posła - podpowiadamy publikację.
+      toast.success('Strona główna zapisana', {
+        description: publicSiteUrl ? 'Opublikuj stronę, aby zmiany pojawiły się na stronie posła.' : undefined,
+        action: publicSiteUrl ? { label: 'Opublikuj stronę', onClick: () => void publish() } : undefined,
+      });
     } catch (err) {
       toast.error('Nie udało się zapisać strony głównej', {
         description: err instanceof Error ? err.message : 'Nieznany błąd',

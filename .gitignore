@@ -47,3 +47,7 @@ geo-source/
 
 # Wynik generatora okręgu (seed SQL dla nowej instancji)
 scripts/districts/out/
+
+# Build serwera VPS (scripts/build-server.mjs) i wydania (scripts/release/build-images.sh)
+build/
+release-out/

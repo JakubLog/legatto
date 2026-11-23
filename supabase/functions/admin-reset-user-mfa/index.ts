@@ -25,8 +25,10 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { corsHeadersFor } from '../_shared/cors.ts';
+import { adminSurfaceGuard } from '../_shared/surface.ts';
 import { isCallerAal2, isCallerPoselRole, POSEL_ONLY_MESSAGE, serviceAudit, UUID_RE } from '../_shared/auth.ts';
 import { lockOutAccount, lockoutFailureMessage } from '../_shared/credentials.ts';
+import { errorSummary } from '../_shared/log-safe.ts';
 
 interface RequestBody {
   user_id?: unknown;
@@ -37,6 +39,9 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: cors });
   }
+  // Na VPS tylko z hosta admin (A5); na crm 404 jak blokada proxy.
+  const surfaceDenied = adminSurfaceGuard(req, cors);
+  if (surfaceDenied) return surfaceDenied;
 
   const json = (body: unknown, status: number) =>
     new Response(JSON.stringify(body), {
@@ -78,7 +83,7 @@ Deno.serve(async (req) => {
 
     const { data: isPoselData, error: roleError } = await callerClient.rpc('is_posel');
     if (roleError) {
-      console.error('is_posel rpc error', roleError);
+      console.error('is_posel rpc error', errorSummary(roleError));
       return json({ error: 'Nie udało się zweryfikować uprawnien' }, 500);
     }
     if (isPoselData !== true) {
@@ -112,7 +117,7 @@ Deno.serve(async (req) => {
       .eq('id', userId)
       .maybeSingle();
     if (targetError) {
-      console.error('profile lookup error', targetError);
+      console.error('profile lookup error', errorSummary(targetError));
       return json({ error: 'Nie udało się pobrać profilu' }, 500);
     }
     if (target?.role === 'posel' && !(await isCallerPoselRole(adminClient, callerUser.user.id))) {
@@ -121,7 +126,7 @@ Deno.serve(async (req) => {
 
     const { data: authData, error: authLookupError } = await adminClient.auth.admin.getUserById(userId);
     if (authLookupError || !authData?.user) {
-      console.error('getUserById error', authLookupError);
+      console.error('getUserById error', errorSummary(authLookupError));
       return json({ error: 'Nie znaleziono użytkownika' }, 404);
     }
     const authEmail = authData.user.email ?? null;
@@ -171,7 +176,7 @@ Deno.serve(async (req) => {
 
     return json({ success: true, ...result }, 200);
   } catch (err) {
-    console.error('admin-reset-user-mfa error', err);
+    console.error('admin-reset-user-mfa error', errorSummary(err));
     return json({ error: 'Wystąpił nieoczekiwany błąd. Skontaktuj się z administratorem.' }, 500);
   }
 });

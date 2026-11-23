@@ -8,7 +8,7 @@
 - **Pracownik** — tworzy interpelację i wgrywa poprawki (w portalu: `InterpellationUploadDialog` → `/api/integracje?op=interpellation_submit|interpellation_resubmit`; albo przez MCP), odczytuje rekordy w swoim zakresie danych oraz potwierdza wysłanie. Obie ścieżki wołają `submitInterpellation` / `resubmitInterpellation` (`api/_lib/tools/interpellations.ts`): ta sama walidacja, `sanitizeHtml`, wyodrębnienie tekstu i audyt (`mcp.interpellation_*` albo `portal.interpellation_*`, `via: portal`).
 - **Asystent** — odczyt w aplikacji zgodnie z `scope_interpellations`; nie ma dostępu do MCP.
 
-Token MCP i aplikację OAuth może utworzyć Poseł, Administrator albo Pracownik po uwierzytelnieniu 2FA (`aal2`) - tylko przy `INSTANCE_AI=on`; przy `off` integracja MCP i jej teksty w module są ukryte, a `/api/mcp` zwraca 404.
+Token MCP i aplikację OAuth może utworzyć Poseł, Administrator albo Pracownik po uwierzytelnieniu 2FA (`aal2`) - tylko przy `INSTANCE_MCP=on`; przy `off` integracja MCP i jej teksty w module są ukryte, a `/api/mcp` zwraca 404.
 
 ## Obieg
 

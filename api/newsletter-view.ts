@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getServiceClient } from './_lib/supabase.js';
+import { errorSummary } from './_lib/log-safe.js';
 
 // Wersja online newslettera: /n/<slug> (rewrite w vercel.json) -> gotowy HTML z newsletter_issues.html_web.
 // Tabela nie ma dostępu dla anon - odczyt kluczem service_role, wyłącznie po niezgadywalnym slugu
@@ -9,6 +10,11 @@ import { getServiceClient } from './_lib/supabase.js';
 // html_web zapisuje przeglądarka (RLS writer), więc treść jest niezaufana: CSP `sandbox` daje stronie
 // unikalny (opaque) origin - bez skryptów, formularzy, dostępu do localStorage/sesji portalu na tej
 // samej domenie. Ten sam nagłówek ustawia vercel.json dla /n/(.*) (globalny CSP portalu wyłącza /n/).
+//
+// Cutover (A8): przy ustawionym app_settings.public_site_url wersje online serwuje statyczna strona
+// posła (/n/<slug>, publikowana przed wysyłką - request_newsletter_publication), a linki w nowych
+// mailach wskazują tę stronę (newsletterWebUrl). Ten endpoint zostaje dla trybu Vercel i dla linków
+// z maili wysłanych przed przejściem instancji na VPS; do usunięcia razem z trybem Vercel.
 
 const SLUG_RE = /^[A-Za-z0-9_-]{16}$/;
 
@@ -60,7 +66,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=86400, stale-while-revalidate=604800');
     return res.status(200).send(data.html_web as string);
   } catch (err) {
-    console.error('[newsletter-view]', err);
+    console.error('[newsletter-view]', errorSummary(err));
     return res.status(500).send(messagePage('Chwilowy błąd', 'Nie udało się wczytać newslettera. Spróbuj za chwilę.'));
   }
 }

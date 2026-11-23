@@ -1,6 +1,7 @@
 import dns from 'node:dns';
 import net from 'node:net';
-import type { IncomingHttpHeaders } from 'node:http';
+import tls from 'node:tls';
+import { request as httpRequest, type IncomingHttpHeaders } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 
 // ===== SSRF GUARD =====
@@ -12,7 +13,12 @@ import { request as httpsRequest } from 'node:https';
 // w URL sprawdzamy przed polaczeniem, a nazwy hostow sa walidowane w `lookup` wywolywanym
 // przez gniazdo w momencie laczenia - polaczenie idzie dokladnie na zwalidowany adres
 // (brak okna TOCTOU / DNS rebinding). Kazdy redirect jest walidowany ponownie (takze
-// schemat i port), a odpowiedz ma limit rozmiaru.
+// schemat, port i lista hostow), a odpowiedz ma limit rozmiaru.
+//
+// Z proxy egress (VPS biura: HTTPS_PROXY=http://egress-app:4750) polaczenie idzie tunelem
+// CONNECT; nazwe celu rozwiazuje proxy (Smokescreen odrzuca adresy prywatne, link-local
+// i hosty spoza allowlisty biura). W kodzie zostaje walidacja URL, literalnych IP,
+// przekierowan, czasu, rozmiaru i - gdy podana - listy dozwolonych hostow.
 
 export class SsrfError extends Error {
   constructor(message: string) {
@@ -139,7 +145,7 @@ const guardedLookup: net.LookupFunction = (hostname, options, callback) => {
   });
 };
 
-function assertPublicUrl(rawUrl: string): URL {
+function assertPublicUrl(rawUrl: string, allowedHosts: readonly string[] | null): URL {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -157,7 +163,60 @@ function assertPublicUrl(rawUrl: string): URL {
   if (net.isIP(hostname) && isBlockedIp(hostname)) {
     throw new SsrfError('Adres IP jest prywatny/zastrzezony');
   }
+  if (allowedHosts !== null && !allowedHosts.includes(url.hostname.toLowerCase())) {
+    throw new SsrfError('Host spoza listy dozwolonych hostow instancji');
+  }
   return url;
+}
+
+// ----- Proxy egress (CONNECT) -----
+
+/** Proxy HTTPS z env (HTTPS_PROXY / https_proxy) dla hosta albo null (brak proxy lub NO_PROXY). */
+export function proxyFor(hostname: string, env: Record<string, string | undefined> = process.env): URL | null {
+  const raw = (env.HTTPS_PROXY ?? env.https_proxy)?.trim();
+  if (!raw) return null;
+  const host = hostname.toLowerCase();
+  for (const entry of (env.NO_PROXY ?? env.no_proxy ?? '').split(',')) {
+    const rule = entry.trim().toLowerCase().replace(/:\d+$/, '');
+    if (!rule) continue;
+    if (rule === '*') return null;
+    const suffix = rule.startsWith('.') ? rule : `.${rule}`;
+    if (host === rule.replace(/^\./, '') || host.endsWith(suffix)) return null;
+  }
+  let proxy: URL;
+  try {
+    proxy = new URL(raw);
+  } catch {
+    throw new Error('HTTPS_PROXY nie jest poprawnym adresem URL');
+  }
+  if (proxy.protocol !== 'http:') throw new Error('HTTPS_PROXY: obslugiwany tylko proxy http://');
+  return proxy;
+}
+
+/** Tunel CONNECT do host:443 przez proxy; odmowa proxy (host spoza allowlisty) = SsrfError. */
+function openTunnel(proxy: URL, hostname: string, signal: AbortSignal): Promise<net.Socket> {
+  const target = `${net.isIPv6(hostname) ? `[${hostname}]` : hostname}:443`;
+  return new Promise((resolve, reject) => {
+    const req = httpRequest({
+      host: proxy.hostname,
+      port: Number(proxy.port || 80),
+      method: 'CONNECT',
+      path: target,
+      headers: { host: target },
+      agent: false,
+      signal,
+    });
+    req.on('connect', (res, socket) => {
+      if (res.statusCode !== 200) {
+        socket.destroy();
+        reject(new SsrfError(`Proxy egress odrzucilo polaczenie (HTTP ${res.statusCode ?? 0})`));
+        return;
+      }
+      resolve(socket);
+    });
+    req.on('error', (err) => reject(signal.aborted ? new Error('Przekroczono limit czasu pobierania') : err));
+    req.end();
+  });
 }
 
 export interface SafeFetchOptions {
@@ -167,6 +226,11 @@ export interface SafeFetchOptions {
   maxRedirects?: number;
   /** Maksymalny rozmiar tresci odpowiedzi w bajtach; przekroczenie przerywa pobieranie. */
   maxBytes?: number;
+  /**
+   * Dozwolone hosty (dokladne nazwy, male litery) dla adresu i kazdego przekierowania; null/brak =
+   * bez ograniczenia (zostaje blokada adresow prywatnych).
+   */
+  allowedHosts?: readonly string[] | null;
 }
 
 export interface SafeFetchResponse {
@@ -176,24 +240,31 @@ export interface SafeFetchResponse {
   body: Buffer;
 }
 
-function requestOnce(
+async function requestOnce(
   url: URL,
   headers: Record<string, string>,
   signal: AbortSignal,
   maxBytes: number,
 ): Promise<SafeFetchResponse> {
+  const hostname = url.hostname.replace(/^\[|\]$/g, '');
+  const proxy = proxyFor(hostname);
+  // Przez proxy: TLS do celu wewnatrz tunelu (SNI tylko dla nazwy hosta, nie dla literalnego IP).
+  const tunnel = proxy ? await openTunnel(proxy, hostname, signal) : null;
+  const tlsSocket = tunnel
+    ? tls.connect({ socket: tunnel, servername: net.isIP(hostname) ? undefined : hostname, ALPNProtocols: ['http/1.1'] })
+    : null;
   return new Promise((resolve, reject) => {
     const timeoutError = () => new Error('Przekroczono limit czasu pobierania');
     const req = httpsRequest(
       {
         protocol: url.protocol,
-        hostname: url.hostname.replace(/^\[|\]$/g, ''),
+        hostname,
         port: 443,
         path: `${url.pathname}${url.search}`,
         method: 'GET',
         // identity: limit bajtow dotyczy faktycznie odbieranej tresci (bez dekompresji).
         headers: { ...headers, 'accept-encoding': 'identity' },
-        lookup: guardedLookup,
+        ...(tlsSocket ? { createConnection: () => tlsSocket } : { lookup: guardedLookup }),
         agent: false,
         signal,
       },
@@ -245,12 +316,12 @@ function requestOnce(
  * przekierowan, czas i rozmiar tresci. Zwraca finalna odpowiedz z buforowana trescia.
  */
 export async function safeFetch(inputUrl: string, opts: SafeFetchOptions = {}): Promise<SafeFetchResponse> {
-  const { headers = {}, timeoutMs = 20_000, maxRedirects = 5, maxBytes = 5 * 1024 * 1024 } = opts;
+  const { headers = {}, timeoutMs = 20_000, maxRedirects = 5, maxBytes = 5 * 1024 * 1024, allowedHosts = null } = opts;
   const signal = AbortSignal.timeout(timeoutMs);
   let currentUrl = inputUrl;
 
   for (let i = 0; i <= maxRedirects; i++) {
-    const url = assertPublicUrl(currentUrl);
+    const url = assertPublicUrl(currentUrl, allowedHosts);
     const resp = await requestOnce(url, headers, signal, maxBytes);
 
     // 3xx z Location - waliduj cel i podazaj recznie

@@ -39,8 +39,9 @@ import { logAudit } from './_lib/audit.js';
 import { callTool, getTool, listTools } from './_lib/tools/index.js';
 import { findPrompt, listPrompts, parsePromptArgs, PromptArgumentError, renderPrompt } from './_lib/prompts.js';
 import { IssuerError, resolveIssuer } from './_lib/issuer.js';
-import { rejectIfAiDisabled } from './_lib/instance.js';
+import { rejectIfMcpDisabled } from './_lib/instance.js';
 import { getSiteIdentity, mpForms, officeFullName } from './_lib/siteIdentity.js';
+import { errorSummary } from './_lib/log-safe.js';
 
 const MCP_PROTOCOL_VERSION = '2024-11-05';
 
@@ -199,7 +200,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Top-level safety net — zamienia niezłapany crash w czytelny JSON zamiast
   // platformowego FUNCTION_INVOCATION_FAILED.
   return handlerInner(req, res).catch((err) => {
-    console.error('[mcp] unhandled crash', err);
+    console.error('[mcp] unhandled crash', errorSummary(err));
     try {
       sendJson(res, 500, rpcError(null, JSON_RPC.INTERNAL_ERROR, 'Blad serwera'));
     } catch {
@@ -217,7 +218,7 @@ async function handlerInner(req: VercelRequest, res: VercelResponse) {
 
   // Preflight wyzej przechodzi, zeby przegladarka mogla odczytac 404 (naglowki CORS).
   applyCors(res);
-  if (rejectIfAiDisabled(res)) return;
+  if (rejectIfMcpDisabled(res)) return;
 
   if (req.method === 'GET') {
     const info = await serverInfo(req);
@@ -258,7 +259,7 @@ async function handlerInner(req: VercelRequest, res: VercelResponse) {
       sendJson(res, 401, rpcError(null, JSON_RPC.UNAUTHORIZED, err.message));
       return;
     }
-    console.error('[mcp] auth error', err);
+    console.error('[mcp] auth error', errorSummary(err));
     sendJson(res, 500, rpcError(null, JSON_RPC.INTERNAL_ERROR, 'Blad serwera podczas autoryzacji'));
     return;
   }
@@ -297,7 +298,7 @@ async function handlerInner(req: VercelRequest, res: VercelResponse) {
       try {
         results.push(await handleRpc(item, ctx, req));
       } catch (err) {
-        console.error('[mcp] batch item error', err);
+        console.error('[mcp] batch item error', errorSummary(err));
         results.push(rpcError(item.id ?? null, JSON_RPC.INTERNAL_ERROR, 'Blad serwera'));
       }
     }
@@ -314,7 +315,7 @@ async function handlerInner(req: VercelRequest, res: VercelResponse) {
     const result = await handleRpc(payload, ctx, req);
     sendJson(res, 200, result);
   } catch (err) {
-    console.error('[mcp] dispatch error', err);
+    console.error('[mcp] dispatch error', errorSummary(err));
     sendJson(res, 500, rpcError(payload.id ?? null, JSON_RPC.INTERNAL_ERROR, 'Blad serwera'));
   }
 }

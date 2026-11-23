@@ -6,6 +6,7 @@
 // wartości (prompt ma działać także bez skonfigurowanej instancji).
 
 import { getServiceClient } from './supabase.js';
+import { DbError, errorSummary } from './log-safe.js';
 
 export type MpGender = 'm' | 'f';
 
@@ -114,12 +115,12 @@ async function loadSiteIdentity(): Promise<SiteIdentityServer> {
       .select('value')
       .eq('key', 'site_identity')
       .maybeSingle();
-    if (error) throw new Error(error.message);
+    if (error) throw new DbError(error, 'app_settings site_identity');
     const value = parseSiteIdentity(data?.value);
     cached = { value, expiresAt: Date.now() + CACHE_TTL_MS };
     return value;
   } catch (err) {
-    console.error('[siteIdentity] odczyt app_settings.site_identity nieudany:', err instanceof Error ? err.message : err);
+    console.error('[siteIdentity] odczyt app_settings.site_identity nieudany:', errorSummary(err));
     cached = { value: NEUTRAL_SITE_IDENTITY, expiresAt: Date.now() + ERROR_TTL_MS };
     return NEUTRAL_SITE_IDENTITY;
   }

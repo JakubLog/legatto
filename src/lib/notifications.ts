@@ -60,7 +60,7 @@ export const NOTIFICATION_KINDS: NotificationKindDef[] = [
     key: 'security_integration',
     category: 'bezpieczenstwo',
     label: 'Nowa usługa podłączona do konta',
-    description: INSTANCE.ai ? 'Token MCP, aplikacja OAuth (np. Claude), kalendarz ICS.' : 'Kalendarz ICS.',
+    description: INSTANCE.mcp ? 'Token MCP, aplikacja OAuth (np. Claude), kalendarz ICS.' : 'Kalendarz ICS.',
     roles: null,
     defaultEmail: yes,
     defaultPush: yes,

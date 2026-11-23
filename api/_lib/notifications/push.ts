@@ -3,6 +3,7 @@
 
 import webpush from 'web-push';
 import { getServiceClient } from '../supabase.js';
+import { DbError, errorSummary } from '../log-safe.js';
 import type { VapidKeys } from './settings.js';
 
 // Te same usługi co CHECK w push_subscriptions - druga linia obrony przed SSRF.
@@ -44,7 +45,7 @@ export async function sendPushToUser(
     .from('push_subscriptions')
     .select('id, endpoint, p256dh, auth, failure_count')
     .eq('user_id', userId);
-  if (error) throw new Error(`push_subscriptions: ${error.message}`);
+  if (error) throw new DbError(error, 'push_subscriptions');
   const rows = (data ?? []) as SubscriptionRow[];
   const result: PushResult = { sent: 0, failed: 0 };
   const payload = JSON.stringify(message);
@@ -75,7 +76,7 @@ export async function sendPushToUser(
         if (status === 404 || status === 410) {
           await supabase.from('push_subscriptions').delete().eq('id', row.id);
         } else {
-          console.error('[notifications] push error', status ?? (err instanceof Error ? err.message : 'unknown'));
+          console.error('[notifications] push error', errorSummary(err));
           await supabase
             .from('push_subscriptions')
             .update({ failure_count: Math.min(row.failure_count + 1, 100) })
@@ -92,6 +93,6 @@ export async function countPushDevices(userId: string): Promise<number> {
     .from('push_subscriptions')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', userId);
-  if (error) throw new Error(`push_subscriptions: ${error.message}`);
+  if (error) throw new DbError(error, 'push_subscriptions');
   return count ?? 0;
 }

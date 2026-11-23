@@ -1,5 +1,7 @@
 import { getServiceClient } from './supabase.js';
+import { icsAllowedHosts, instanceFlags } from './instance.js';
 import { safeFetch, SsrfError } from './safe-fetch.js';
+import { errorSummary } from './log-safe.js';
 
 // ===== ICS PARSER =====
 
@@ -120,7 +122,8 @@ const MAX_ICS_BYTES = 5 * 1024 * 1024;
 // Na zewnatrz (odpowiedz API, PoliAI) tylko stale komunikaty: kod HTTP, blad sieci czy adres
 // z DNS pozwalalyby sondowac cudze hosty z infrastruktury instancji. Szczegoly w logu.
 const FETCH_FAILED = 'Nie udało się pobrać kalendarza.';
-const URL_REJECTED = 'Niedozwolony adres kalendarza (wymagany publiczny adres https).';
+const URL_REJECTED = 'Niedozwolony adres kalendarza (wymagany publiczny adres https z listy hostów instancji).';
+const ICS_DISABLED = 'Kalendarze ICS są wyłączone na tej instancji.';
 const SAVE_FAILED = 'Nie udało się zapisać wydarzeń z kalendarza.';
 
 export async function syncSource(sourceId: string, userId: string): Promise<SyncResult> {
@@ -139,6 +142,9 @@ export async function syncSource(sourceId: string, userId: string): Promise<Sync
   if (source.is_active !== true) {
     return { sourceId, name: source.name as string, imported: 0, inRange: 0, error: 'Source inactive' };
   }
+  if (!instanceFlags().ics) {
+    return { sourceId, name: source.name as string, imported: 0, inRange: 0, error: ICS_DISABLED };
+  }
 
   let icsText: string;
   try {
@@ -146,11 +152,14 @@ export async function syncSource(sourceId: string, userId: string): Promise<Sync
       headers: { 'User-Agent': 'Office-Calendar-Sync/1.0' },
       timeoutMs: 20_000,
       maxBytes: MAX_ICS_BYTES,
+      allowedHosts: icsAllowedHosts(),
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     icsText = resp.body.toString('utf8');
   } catch (e) {
-    console.error('[ics-sync] fetch error', sourceId, e instanceof Error ? e.message : e);
+    // Bez adresu (link iCal niesie sekret) i bez komunikatu błędu (DNS/TLS podaje nazwę hosta) - tylko kod.
+    const reason = e instanceof SsrfError ? 'ssrf' : e instanceof Error ? (/^HTTP \d{3}$/.test(e.message) ? e.message : e.name) : 'unknown';
+    console.error('[ics-sync] fetch error', sourceId, reason);
     const error = e instanceof SsrfError ? URL_REJECTED : FETCH_FAILED;
     return { sourceId, name: source.name as string, imported: 0, inRange: 0, error };
   }
@@ -178,7 +187,7 @@ export async function syncSource(sourceId: string, userId: string): Promise<Sync
   });
 
   if (rpcErr) {
-    console.error('[ics-sync] sync_ics_events error', sourceId, rpcErr.code, rpcErr.message);
+    console.error('[ics-sync] sync_ics_events error', sourceId, errorSummary(rpcErr));
     return { sourceId, name: source.name as string, imported: 0, inRange: events.length, error: SAVE_FAILED };
   }
 

@@ -4,6 +4,7 @@
 
 import type { VercelRequest } from '@vercel/node';
 import { getAnonClient, getServiceClient } from '../supabase.js';
+import { DbError, errorSummary } from '../log-safe.js';
 import { isAal2Session } from '../jwt.js';
 import { buildAuthContext, isMcpRole, loadAuthProfile, parseBearer, type McpAuthContext } from '../auth.js';
 import { auditMetadata } from '../audit.js';
@@ -54,14 +55,14 @@ export interface AiSettings {
 
 async function loadVaultKey(): Promise<string> {
   const { data, error } = await getServiceClient().rpc('service_get_secrets', { p_keys: ['anthropic_api_key'] });
-  if (error) throw new Error(`service_get_secrets: ${error.message}`);
+  if (error) throw new DbError(error, 'service_get_secrets');
   const secrets = (data ?? []) as { key: string; value: string }[];
   return secrets.find((row) => row.key === 'anthropic_api_key')?.value.trim() ?? '';
 }
 
 async function loadPanelModel(): Promise<string> {
   const { data, error } = await getServiceClient().from('app_settings').select('value').eq('key', 'ai_model').maybeSingle();
-  if (error) throw new Error(`app_settings: ${error.message}`);
+  if (error) throw new DbError(error, 'app_settings');
   return typeof data?.value === 'string' ? data.value.trim() : '';
 }
 
@@ -117,7 +118,7 @@ export async function enforceDailyLimit(
     p_metadata: auditMetadata(ctx, metadata),
   });
   if (error) {
-    console.error('[poliai] daily limit claim error', error);
+    console.error('[poliai] daily limit claim error', errorSummary(error));
     throw new HttpError(500, 'Nie udało się sprawdzić dziennego limitu. Spróbuj ponownie.');
   }
   if (data !== true) throw new HttpError(429, limit.message, limit.code);

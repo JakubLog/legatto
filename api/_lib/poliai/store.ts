@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { McpAuthContext } from '../auth.js';
 import { getServiceClient } from '../supabase.js';
+import { DbError } from '../log-safe.js';
 import { HistorySchema, type ApiMessage } from './conversation.js';
 
 const ActionSchema = z.object({ label: z.string(), prompt: z.string().optional(), href: z.string().optional() });
@@ -55,7 +56,7 @@ export async function loadConversation(ctx: McpAuthContext, id: string): Promise
     .eq('id', id)
     .eq('user_id', ctx.userId)
     .maybeSingle();
-  if (error) throw new Error(`poliai_conversations select: ${error.message}`);
+  if (error) throw new DbError(error, 'poliai_conversations select');
   if (!data) throw new ConversationNotFoundError('Rozmowa nie istnieje albo została usunięta.');
   return fromRow(data);
 }
@@ -91,7 +92,7 @@ export async function saveConversation(ctx: McpAuthContext, c: Conversation): Pr
       summary: c.summary,
       updated_at: new Date().toISOString(),
     });
-  if (error) throw new Error(`poliai_conversations upsert: ${error.message}`);
+  if (error) throw new DbError(error, 'poliai_conversations upsert');
 }
 
 export interface PastConversation {
@@ -122,7 +123,7 @@ export async function listPastConversations(
     if (safe) q = q.or(`title.ilike.%${safe}%,summary.ilike.%${safe}%`);
   }
   const { data, error } = await q;
-  if (error) throw new Error(`poliai_conversations memory: ${error.message}`);
+  if (error) throw new DbError(error, 'poliai_conversations memory');
   return z
     .array(z.object({ id: z.string(), title: z.string().nullable(), summary: z.string(), updated_at: z.string() }))
     .parse(data ?? []);

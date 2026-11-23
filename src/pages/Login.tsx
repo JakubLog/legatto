@@ -12,7 +12,7 @@ import { AuthBackdrop, AuthHeader, AuthLayout } from '@/components/auth/AuthLayo
 import { ProfilePicker } from '@/components/auth/ProfilePicker';
 import { TrustedPinForm } from '@/components/auth/TrustedPinForm';
 import { CreatorAvatar } from '@/components/common/CreatorAvatar';
-import { useSiteContent } from '@/hooks/useSiteContent';
+import { usePublicSite } from '@/hooks/usePublicSite';
 import { safeRedirectPath } from '@/lib/safeRedirect';
 import {
   forgetRememberedProfile,
@@ -47,7 +47,8 @@ export default function Login() {
   const [view, setView] = useState<'picker' | 'pin' | 'password'>('picker');
   const [selected, setSelected] = useState<RememberedProfile | null>(null);
   const [remember, setRemember] = useState(true);
-  const { data: site } = useSiteContent();
+  // Ekran logowania jest anonimowy: marka posła z /api/public-site (anon nie ma get_public_*).
+  const { data: site } = usePublicSite();
   const district = site?.identity.district_label ?? '';
 
   const reason = searchParams.get('reason');

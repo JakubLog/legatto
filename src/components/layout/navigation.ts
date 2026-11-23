@@ -5,11 +5,13 @@ import {
   Building2,
   Calendar,
   ClipboardList,
+  DatabaseBackup,
   FileText,
   History,
   Home,
   LayoutTemplate,
   MapPinned,
+  Newspaper,
   Plug,
   Settings,
   Signature,
@@ -62,8 +64,13 @@ export const INTEGRATIONS_NAV_ITEM: NavItem = {
   to: '/biuro/admin/integracje',
   label: 'Integracje',
   Icon: Plug,
-  // Słowa AI/MCP tylko z włączonym AI - inaczej wyszukiwarka prowadziłaby do nieistniejących kafelków.
-  keywords: INSTANCE.ai ? ['mcp', 'claude', 'getresponse', 'ics', 'ai'] : ['getresponse', 'ics'],
+  // Słowa kluczowe tylko włączonych integracji - inaczej wyszukiwarka prowadziłaby do nieistniejących kafelków.
+  keywords: [
+    ...(INSTANCE.mcp ? ['mcp', 'claude'] : []),
+    ...(INSTANCE.getresponse ? ['getresponse'] : []),
+    ...(INSTANCE.ics ? ['ics'] : []),
+    ...(INSTANCE.ai ? ['ai'] : []),
+  ],
 };
 
 /** Kosz: dla każdej roli (Poseł/administrator widzą wszystkie pozycje, pozostali swoje usunięcia). */
@@ -86,6 +93,12 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
     keywords: ['strona publiczna', 'witryna', 'hero', 'seo', 'zdjęcie posła'],
   },
   {
+    to: '/biuro/admin/blog',
+    label: 'Blog',
+    Icon: Newspaper,
+    keywords: ['wpisy', 'aktualności', 'artykuły', 'strona posła'],
+  },
+  {
     to: '/biuro/admin/obowiązki',
     label: 'Podział obowiązków',
     Icon: ClipboardList,
@@ -93,6 +106,13 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
     desktopOnly: true,
   },
   { to: '/biuro/admin/audit', label: 'Dziennik zmian', Icon: History, keywords: ['audit', 'historia'], desktopOnly: true },
+  {
+    to: '/biuro/admin/eksport-danych',
+    label: 'Eksport danych',
+    Icon: DatabaseBackup,
+    keywords: ['kopia', 'backup', 'archiwum', 'zip', 'pobierz dane'],
+    desktopOnly: true,
+  },
   INTEGRATIONS_NAV_ITEM,
   TRASH_NAV_ITEM,
 ];

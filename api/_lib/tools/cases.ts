@@ -1,4 +1,5 @@
 import { getServiceClient } from '../supabase.js';
+import { DbError } from '../log-safe.js';
 import { logAudit } from '../audit.js';
 import { applyDataScope } from '../access.js';
 import { isPoselRole } from '../auth.js';
@@ -74,7 +75,7 @@ export const casesTools: ToolDefinition[] = [
       if (source) q = q.eq('source', source);
 
       const { data, error } = await q;
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       const cases = (await withLabels(data ?? [], CASE_LABELS)).map(markCase);
       return jsonResult({ count: cases.length, cases });
     },
@@ -101,7 +102,7 @@ export const casesTools: ToolDefinition[] = [
         ctx,
         'cases',
       ).maybeSingle();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       if (!caseRow) return textResult(`Sprawa o id=${id} nie istnieje lub jest poza Twoim zakresem danych.`, true);
       // audit_log czyta tylko Posel/Administrator (RLS audit_log_select_posel).
       const labelled = markCase(await withLabel(caseRow, CASE_LABELS));
@@ -113,7 +114,7 @@ export const casesTools: ToolDefinition[] = [
         .eq('entity_id', id)
         .order('created_at', { ascending: false })
         .limit(20);
-      if (auditError) throw new Error(auditError.message);
+      if (auditError) throw new DbError(auditError);
       return jsonResult({ case: labelled, timeline: (timeline ?? []).map(markAuditEntry) });
     },
   },
@@ -166,7 +167,7 @@ export const casesTools: ToolDefinition[] = [
         created_by: ctx.userId,
       };
       const { data, error } = await supabase.from('cases').insert(insert).select().single();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       // Trigger case_audit_trigger juz logu 'case.create' - dorzucamy MCP marker
       await logAudit(ctx, 'mcp.case_create', {
         entityType: 'case',
@@ -211,7 +212,7 @@ export const casesTools: ToolDefinition[] = [
       )
         .select()
         .maybeSingle();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       if (!data) return textResult(`Sprawa o id=${id} nie istnieje lub jest poza Twoim zakresem danych.`, true);
       await logAudit(ctx, 'mcp.case_update_status', {
         entityType: 'case',
@@ -248,7 +249,7 @@ export const casesTools: ToolDefinition[] = [
         'cases',
       );
       const { data: caseRow, error: caseErr } = await caseQuery.maybeSingle();
-      if (caseErr) throw new Error(caseErr.message);
+      if (caseErr) throw new DbError(caseErr);
       if (!caseRow) return textResult(`Sprawa o id=${id} nie istnieje lub jest poza Twoim zakresem danych.`, true);
 
       await logAudit(ctx, 'case.note', {
@@ -306,7 +307,7 @@ export const casesTools: ToolDefinition[] = [
       )
         .select()
         .maybeSingle();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       if (!data) return textResult(`Sprawa o id=${id} nie istnieje lub jest poza Twoim zakresem danych.`, true);
       await logAudit(ctx, 'mcp.case_update', { entityType: 'case', entityId: id, metadata: { fields: Object.keys(update), tool: 'cases_update' } });
       return jsonResult({ updated: true, case: markCase(await withLabel(data, CASE_LABELS)) });
@@ -329,7 +330,7 @@ export const casesTools: ToolDefinition[] = [
       const id = requireString({ id: args.id }, 'id', 64);
       const supabase = getServiceClient();
       const { error } = await supabase.from('cases').delete().eq('id', id);
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       await logAudit(ctx, 'mcp.case_delete', { entityType: 'case', entityId: id, metadata: { tool: 'cases_delete' } });
       return jsonResult({ deleted: true, id });
     },

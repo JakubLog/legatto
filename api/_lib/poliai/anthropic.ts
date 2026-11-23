@@ -207,8 +207,10 @@ export async function streamModel(req: ModelRequest, onEvent: (e: StreamEvent) =
 
   if (!res.ok || !res.body) {
     const body = await res.text().catch(() => '');
-    console.error('[poliai] Anthropic API error', res.status, body.slice(0, 500));
-    throw describeAnthropicError(res.status, errorMessageOf(body));
+    // Bez body: komunikat walidacji Anthropic potrafi cytowac fragment rozmowy.
+    const err = describeAnthropicError(res.status, errorMessageOf(body));
+    console.error('[poliai] Anthropic API error', res.status, err.code);
+    throw err;
   }
 
   const blocks = new Map<number, DraftBlock>();
@@ -271,7 +273,7 @@ export async function streamModel(req: ModelRequest, onEvent: (e: StreamEvent) =
       }
       case 'error': {
         const { error } = StreamError.parse(raw);
-        console.error('[poliai] Anthropic stream error', error);
+        console.error('[poliai] Anthropic stream error', error.type ?? 'unknown');
         throw describeAnthropicError(error.type === 'overloaded_error' ? 529 : 500, error.message ?? '');
       }
     }

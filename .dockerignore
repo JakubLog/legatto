@@ -1,0 +1,21 @@
+# Kontekst buildów obrazów app / functions / migrator (Dockerfile, docker/*/Dockerfile)
+.git
+.github
+.claude
+node_modules
+**/node_modules
+dist
+dev-dist
+build
+release-out
+coverage
+*.local
+.env
+.env.*
+!.env.example
+supabase/.temp
+supabase/.branches
+geo-source
+scripts/districts/out
+ai-lib
+*.log

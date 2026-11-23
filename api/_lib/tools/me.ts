@@ -1,4 +1,5 @@
 import { getServiceClient } from '../supabase.js';
+import { DbError } from '../log-safe.js';
 import { type ToolDefinition, jsonResult, markCase, markEvent, optionalNumber, ToolValidationError } from './types.js';
 
 const OPEN_CASE_STATUSES = ['nowa', 'w_toku', 'oczekuje'];
@@ -29,8 +30,8 @@ export const meTools: ToolDefinition[] = [
               .order('full_name')
           : Promise.resolve({ data: [], error: null }),
       ]);
-      if (profileRes.error) throw new Error(profileRes.error.message);
-      if (colleaguesRes.error) throw new Error(colleaguesRes.error.message);
+      if (profileRes.error) throw new DbError(profileRes.error);
+      if (colleaguesRes.error) throw new DbError(colleaguesRes.error);
       return jsonResult({
         profile: profileRes.data,
         data_scopes: ctx.dataScopes,
@@ -90,9 +91,9 @@ export const meTools: ToolDefinition[] = [
           .limit(50),
         interpellationsQuery,
       ]);
-      if (casesRes.error) throw new Error(casesRes.error.message);
-      if (eventsRes.error) throw new Error(eventsRes.error.message);
-      if (interpellationsRes.error) throw new Error(interpellationsRes.error.message);
+      if (casesRes.error) throw new DbError(casesRes.error);
+      if (eventsRes.error) throw new DbError(eventsRes.error);
+      if (interpellationsRes.error) throw new DbError(interpellationsRes.error);
 
       const cases = (casesRes.data ?? []).map(markCase);
       return jsonResult({

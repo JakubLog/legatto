@@ -1,0 +1,10 @@
+{
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.45.4",
+    "@noble/ciphers/": "npm:/@noble/ciphers@2.4.0/",
+    "@noble/hashes/": "npm:/@noble/hashes@2.4.0/"
+  },
+  "lock": {
+    "frozen": true
+  }
+}

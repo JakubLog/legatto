@@ -104,8 +104,8 @@ const SERVICE_LABELS: Record<string, string> = {
   ics: 'Kalendarz ICS',
 };
 
-// Strona MCP istnieje tylko z włączonym AI (INSTANCE_AI=on); inaczej stare powiadomienia prowadzą do listy integracji.
-const MCP_PATH = INSTANCE.ai ? '/biuro/admin/integracje/mcp' : '/biuro/admin/integracje';
+// Strona MCP istnieje tylko z włączonym MCP (INSTANCE_MCP=on); inaczej stare powiadomienia prowadzą do listy integracji.
+const MCP_PATH = INSTANCE.mcp ? '/biuro/admin/integracje/mcp' : '/biuro/admin/integracje';
 const SERVICE_PATHS: Record<string, string> = {
   mcp: MCP_PATH,
   oauth: MCP_PATH,

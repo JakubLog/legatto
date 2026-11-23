@@ -229,8 +229,8 @@ function integrationMessage(raw: unknown): Message {
         text: 'Jeśli to nie Ty, od razu unieważnij dostęp w Integracjach i powiadom administratora biura.',
       },
     ],
-    // Strona MCP istnieje tylko przy INSTANCE_AI=on - inaczej hub Integracji (jak src/lib/notificationInbox.ts).
-    cta: { label: 'Sprawdź integracje', path: (instanceFlags().ai ? SERVICE_PATHS[service] : undefined) ?? '/biuro/admin/integracje' },
+    // Strona MCP istnieje tylko przy INSTANCE_MCP=on - inaczej hub Integracji (jak src/lib/notificationInbox.ts).
+    cta: { label: 'Sprawdź integracje', path: (instanceFlags().mcp ? SERVICE_PATHS[service] : undefined) ?? '/biuro/admin/integracje' },
     push: { title: 'Nowa usługa podłączona do konta', body: `${label[0].toUpperCase()}${label.slice(1)}. Jeśli to nie Ty, sprawdź Integracje.`, path: '/biuro/admin/integracje' },
   };
 }

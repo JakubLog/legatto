@@ -1,0 +1,8 @@
+// Wspólna mapa importów edge-runtime na VPS (router main/index.ts przekazuje ją każdemu workerowi
+// jako importMapPath zamiast deno.json funkcji). Zależności funkcji z supabase/functions/*/deno.json -
+// te same wersje co na Supabase Cloud (zmiana wersji w deno.json funkcji wymaga zmiany tutaj).
+{
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.45.4"
+  }
+}

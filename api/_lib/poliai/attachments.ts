@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import type { McpAuthContext } from '../auth.js';
 import { getServiceClient } from '../supabase.js';
+import { DbError, errorSummary } from '../log-safe.js';
 import { AnthropicApiError, ocrImage } from './anthropic.js';
 import {
   AttachmentKindSchema,
@@ -135,7 +136,7 @@ function sniffImageType(bytes: Buffer): ImageMediaType | null {
 /** Obraz strony jako base64; null, gdy plik nie jest obrazem webp/jpeg/png. */
 async function downloadImage(path: string): Promise<{ mediaType: ImageMediaType; data: string } | null> {
   const { data, error } = await getServiceClient().storage.from(BUCKET).download(path);
-  if (error || !data) throw new Error(`storage download ${path}: ${error?.message ?? 'brak danych'}`);
+  if (error || !data) throw new DbError(error, 'storage download');
   const bytes = Buffer.from(await data.arrayBuffer());
   const mediaType = sniffImageType(bytes);
   return mediaType ? { mediaType, data: bytes.toString('base64') } : null;
@@ -154,7 +155,7 @@ async function listPageObjects(
   const { data, error } = await getServiceClient()
     .storage.from(BUCKET)
     .list(folder, { limit: 100, sortBy: { column: 'name', order: 'asc' } });
-  if (error) throw new Error(`storage list ${folder}: ${error.message}`);
+  if (error) throw new DbError(error, 'storage list');
   const objects = data ?? [];
   if (objects.length !== pageCount) throw filesMismatch();
   return objects.map((object, i) => {
@@ -177,7 +178,7 @@ async function listPageObjects(
 function ocrError(err: unknown): HttpError {
   if (err instanceof HttpError) return err;
   if (err instanceof AnthropicApiError) return new HttpError(502, err.message, err.code);
-  console.error('[poliai] attachment OCR failed', err instanceof Error ? err.message : err);
+  console.error('[poliai] attachment OCR failed', errorSummary(err));
   return new HttpError(502, 'Nie udało się odczytać tekstu z załącznika. Spróbuj ponownie.', 'POLIAI_OCR_FAILED');
 }
 
@@ -226,7 +227,7 @@ export async function prepareAttachment(
 
   const supabase = getServiceClient();
   const existing = await supabase.from('poliai_attachments').select('id').eq('id', id).maybeSingle();
-  if (existing.error) throw new Error(`poliai_attachments select: ${existing.error.message}`);
+  if (existing.error) throw new DbError(existing.error, 'poliai_attachments select');
   if (existing.data) throw new HttpError(409, 'Ten załącznik został już przygotowany.', 'POLIAI_ATTACHMENT_EXISTS');
 
   const hasImages = kind === 'image' || kind === 'pdf';
@@ -279,7 +280,7 @@ export async function prepareAttachment(
   if (error?.code === '23505') {
     throw new HttpError(409, 'Ten załącznik został już przygotowany.', 'POLIAI_ATTACHMENT_EXISTS');
   }
-  if (error) throw new Error(`poliai_attachments insert: ${error.message}`);
+  if (error) throw new DbError(error, 'poliai_attachments insert');
 
   return { attachment: { id, name, kind, mime, size: storedSize, pages: storedPages.length } };
 }
@@ -296,7 +297,7 @@ export async function claimAttachments(ctx: McpAuthContext, ids: string[]): Prom
     .eq('user_id', ctx.userId)
     .is('conversation_id', null)
     .in('id', ids);
-  if (error) throw new Error(`poliai_attachments claim: ${error.message}`);
+  if (error) throw new DbError(error, 'poliai_attachments claim');
   const rows = new Map(z.array(RowSchema).parse(data ?? []).map((r) => [r.id, r]));
   return ids.map((id): AttachmentBlock => {
     const row = rows.get(id);
@@ -326,7 +327,7 @@ export async function bindAttachments(ctx: McpAuthContext, ids: string[], conver
     .is('conversation_id', null)
     .in('id', ids)
     .select('id');
-  if (error) throw new Error(`poliai_attachments bind: ${error.message}`);
+  if (error) throw new DbError(error, 'poliai_attachments bind');
   if ((data ?? []).length !== ids.length) throw invalidAttachment();
 }
 
@@ -360,7 +361,7 @@ export async function resolveAttachments(
       .eq('user_id', ctx.userId)
       .eq('conversation_id', conversationId)
       .in('id', ids.slice(i, i + 100));
-    if (error) throw new Error(`poliai_attachments resolve: ${error.message}`);
+    if (error) throw new DbError(error, 'poliai_attachments resolve');
     rows.push(...z.array(RowSchema).parse(data ?? []));
   }
   const rowsById = new Map(rows.map((r) => [r.id, r]));
@@ -396,7 +397,7 @@ export async function resolveAttachments(
       page.image = await downloadImage(path);
       if (!page.image) console.warn('[poliai] attachment image format not recognized', path);
     } catch (err) {
-      console.warn('[poliai] attachment image download failed', err instanceof Error ? err.message : err);
+      console.warn('[poliai] attachment image download failed', errorSummary(err));
     }
   });
   return resolved;

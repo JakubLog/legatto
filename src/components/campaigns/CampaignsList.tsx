@@ -19,6 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { GrNewsletter } from '@/hooks/useGetResponse';
 import { useDeleteNewsletter } from '@/hooks/useGetResponse';
 import { newsletterWebUrl, type NewsletterIssueSummary } from '@/hooks/useNewsletterIssues';
+import { usePublicSiteUrl } from '@/hooks/useSitePublish';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -105,6 +106,7 @@ export function CampaignsList({
   readOnly = false,
 }: Props) {
   const deleteMut = useDeleteNewsletter();
+  const publicSiteUrl = usePublicSiteUrl().data ?? '';
   const [toDelete, setToDelete] = useState<GrNewsletter | null>(null);
 
   const handleDelete = async () => {
@@ -203,7 +205,7 @@ export function CampaignsList({
               {issue && (
                 <div className="flex shrink-0 items-center gap-2 @max-md:order-3 @max-md:ml-auto">
                   <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground" asChild>
-                    <a href={newsletterWebUrl(issue.slug)} target="_blank" rel="noopener noreferrer" title="Wersja online">
+                    <a href={newsletterWebUrl(issue.slug, publicSiteUrl)} target="_blank" rel="noopener noreferrer" title="Wersja online">
                       <ExternalLink className="h-4 w-4" />
                       <span className="hidden @lg:inline @max-md:inline">Online</span>
                     </a>

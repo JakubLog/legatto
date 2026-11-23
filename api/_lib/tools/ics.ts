@@ -1,4 +1,6 @@
 import { getServiceClient } from '../supabase.js';
+import { DbError } from '../log-safe.js';
+import { icsAllowedHosts, instanceFlags, isIcsHostAllowed } from '../instance.js';
 import { logAudit } from '../audit.js';
 import { syncSource } from '../ics-sync.js';
 import {
@@ -30,6 +32,13 @@ function requireIcsUrl(args: Record<string, unknown>): string {
   if (!raw.includes('.ics') && !raw.includes('ical')) {
     throw new ToolValidationError('To nie wygląda na link ICS/iCal (oczekiwano ".ics" lub "ical" w adresie).');
   }
+  // Na VPS egress biura przepuszcza tylko hosty zatwierdzone przez admina (ICS_ALLOWED_HOSTS).
+  if (!instanceFlags().ics) throw new ToolValidationError('Kalendarze ICS są wyłączone na tej instancji.');
+  if (!isIcsHostAllowed(raw)) {
+    throw new ToolValidationError(
+      `Host kalendarza nie jest na liście dozwolonych: ${(icsAllowedHosts() ?? []).join(', ') || 'lista pusta'}. Admin biura dodaje hosty w panelu serwera.`,
+    );
+  }
   return raw;
 }
 
@@ -60,7 +69,7 @@ export const icsTools: ToolDefinition[] = [
         .from('ics_sources')
         .select(SOURCE_COLUMNS)
         .order('created_at', { ascending: true });
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       return jsonResult({ count: data?.length ?? 0, sources: (data ?? []).map(maskSource) });
     },
   },
@@ -94,7 +103,7 @@ export const icsTools: ToolDefinition[] = [
         .insert({ name, url, created_by: ctx.userId })
         .select(SOURCE_COLUMNS)
         .single();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       await logAudit(ctx, 'mcp.ics_source_create', {
         entityType: 'ics_source',
         entityId: data.id,
@@ -139,7 +148,7 @@ export const icsTools: ToolDefinition[] = [
         .eq('id', id)
         .select(SOURCE_COLUMNS)
         .maybeSingle();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       if (!data) return textResult(`Źródło ICS o id=${id} nie istnieje.`, true);
       await logAudit(ctx, 'mcp.ics_source_update', {
         entityType: 'ics_source',
@@ -168,7 +177,7 @@ export const icsTools: ToolDefinition[] = [
       const id = requireString({ id: args.id }, 'id', 64);
       const supabase = getServiceClient();
       const { data, error } = await supabase.from('ics_sources').delete().eq('id', id).select('id, name');
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       if (!data || data.length === 0) return textResult(`Źródło ICS o id=${id} nie istnieje.`, true);
       await logAudit(ctx, 'mcp.ics_source_delete', {
         entityType: 'ics_source',

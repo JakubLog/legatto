@@ -59,12 +59,18 @@ export interface RenderOptions {
   /** Adres wersji online - link "Wyswietl w przegladarce" w mailu. Bez niego pasek jest pomijany. */
   webUrl?: string;
   identity: NewsletterIdentity;
+  /**
+   * Origin strony posla (app_settings.public_site_url, https://host) albo ''/brak (tryb Vercel).
+   * Ustawiony: mail i wersja online biora czcionke i obrazy ze strony posla (CRM jest tylko w tailnecie).
+   */
+  publicSiteUrl?: string;
 }
 
 interface RenderCtx {
   preview: boolean;
   web: boolean;
   identity: NewsletterIdentity;
+  publicSiteUrl: string;
 }
 
 /** Etykieta sekcji regionalnej: region z naglowka albo neutralne "Z regionu". */
@@ -124,9 +130,22 @@ function placeholderSrc(w: number, h: number, label: string): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
+// Obrazy z bucketu newsletter-assets nazwane sha256 tresci ({userId}/{sha256}.{ext}, useNewsletterAssets).
+// Przy stronie posla mail i wersja online wskazuja ich kopie na stronie (/n/a/<sha256>.<ext> - generator
+// kopiuje obiekty wymienione w html_web, zob. service_site_snapshot); podglad w CRM zostaje przy URL-u
+// Storage, bo plik na stronie pojawia sie dopiero po publikacji. Starsze pliki (inne nazwy) bez zmian.
+const NEWSLETTER_ASSET_RE =
+  /\/storage\/v1\/object\/public\/newsletter-assets\/[^/?#]+\/([0-9a-f]{64}\.(?:png|jpg|webp|gif))$/;
+
+function assetUrl(raw: string | undefined, ctx: RenderCtx): string | undefined {
+  if (!raw || ctx.preview || !ctx.publicSiteUrl) return raw;
+  const match = NEWSLETTER_ASSET_RE.exec(raw.trim());
+  return match ? `${ctx.publicSiteUrl}/n/a/${match[1]}` : raw;
+}
+
 /** Bezpieczny src obrazka; pusty -> placeholder w podgladzie, '' w mailu. */
 function imageSrc(raw: string | undefined, ctx: RenderCtx, w: number, h: number, label = 'Dodaj zdjęcie'): string {
-  const url = safeUrl(raw);
+  const url = safeUrl(assetUrl(raw, ctx));
   if (url || !ctx.preview) return url;
   return escapeAttr(placeholderSrc(w, h, label));
 }
@@ -168,8 +187,8 @@ const SPACER = `\n<tr><td style="height:8px; background-color:#DCDDE1;"></td></t
 
 const FONT_STACK = `'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif`;
 
-// Source Sans 3 (OFL, public/fonts/newsletter/OFL.txt) z originu instancji - bez zewnetrznych hostow
-// fontow. Plik zmienny (wght 200-900) w dwoch podzbiorach; latin-ext niesie polskie znaki.
+// Source Sans 3 (OFL, public/fonts/newsletter/OFL.txt) z originu instancji albo strony posla - bez
+// zewnetrznych hostow fontow. Plik zmienny (wght 200-900) w dwoch podzbiorach; latin-ext niesie polskie znaki.
 const FONT_PATH = '/fonts/newsletter';
 const FONT_FACES: ReadonlyArray<{ file: string; range: string }> = [
   {
@@ -185,13 +204,16 @@ const FONT_FACES: ReadonlyArray<{ file: string; range: string }> = [
 ];
 
 /**
- * `@font-face` szablonu. Mail (i podglad, ktory go odwzorowuje) potrzebuje absolutnego URL-a originu
- * instancji - klient pocztowy nie zna bazy. Wersja online (/n/<slug>) jest serwowana z tego samego
- * originu, wiec sciezka wzgledna przetrwa zmiane domeny instancji. `@media screen` ukrywa reguly
- * przed Outlookiem (Word), ktory przy `@font-face` spada do Times New Roman zamiast FONT_STACK.
+ * `@font-face` szablonu. Mail potrzebuje absolutnego URL-a: strony posla (public_site_url - CRM na VPS
+ * jest tylko w tailnecie), a bez niej originu instancji. Wersja online (/n/<slug>) jest serwowana z tego
+ * samego originu co czcionka (portal albo strona posla), wiec sciezka wzgledna przetrwa zmiane domeny.
+ * Podglad w CRM bierze plik z originu portalu. `@media screen` ukrywa reguly przed Outlookiem (Word),
+ * ktory przy `@font-face` spada do Times New Roman zamiast FONT_STACK.
  */
 function fontFaceCss(ctx: RenderCtx): string {
-  const base = ctx.web ? FONT_PATH : `${window.location.origin}${FONT_PATH}`;
+  const base = ctx.web
+    ? FONT_PATH
+    : `${!ctx.preview && ctx.publicSiteUrl ? ctx.publicSiteUrl : window.location.origin}${FONT_PATH}`;
   const faces = FONT_FACES.map(
     ({ file, range }) =>
       `@font-face { font-family: 'Source Sans 3'; font-style: normal; font-weight: 200 900; font-display: swap; src: url('${base}/${file}') format('woff2'); unicode-range: ${range}; }`,
@@ -213,7 +235,7 @@ function wrapBlock(key: PreviewBlockKey, comment: string, inner: string, ctx: Re
 // ============================================================================
 
 function renderHeader(h: HeaderSection, officeName: string, ctx: RenderCtx): string {
-  const avatarUrl = safeUrl(h.avatar_url);
+  const avatarUrl = safeUrl(assetUrl(h.avatar_url, ctx));
   const date = escapeHtml(h.date_label);
   // Domyslnie GR merge tag [[firstname]] - escape go nie zmienia, a blokuje wstrzykniecie HTML.
   const greeting = ctx.web ? 'Cześć!' : `Cześć, ${escapeHtml(h.greeting_first_token || '[[firstname]]')}!`;
@@ -1057,7 +1079,12 @@ const PREVIEW_STYLE = `
 
 export function renderNewsletter(t: NewsletterTemplate, opts: RenderOptions): string {
   const mode = opts.mode ?? 'email';
-  const ctx: RenderCtx = { preview: mode === 'preview', web: mode === 'web', identity: opts.identity };
+  const ctx: RenderCtx = {
+    preview: mode === 'preview',
+    web: mode === 'web',
+    identity: opts.identity,
+    publicSiteUrl: (opts.publicSiteUrl ?? '').replace(/\/+$/, ''),
+  };
   const preheader = escapeHtml(t.preheader || '');
   const webUrl = safeUrl(opts.webUrl);
   // Podglad pokazuje pasek zawsze (link powstaje dopiero przy wysylce); wersja online go nie potrzebuje.

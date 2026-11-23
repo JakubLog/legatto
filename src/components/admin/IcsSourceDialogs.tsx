@@ -18,7 +18,21 @@ import { Label } from '@/components/ui/label';
 import { DangerTitleIcon } from '@/components/admin/AdminUi';
 
 import { useCreateIcsSource, useDeleteIcsSource, type IcsSource } from '@/hooks/useIcsSources';
+import { RUNTIME_CONFIG } from '@/lib/runtime-config';
 import { cn } from '@/lib/utils';
+
+// Na serwerze biura egress przepuszcza tylko hosty zatwierdzone przez admina (ICS_ALLOWED_HOSTS);
+// null = bez listy (Vercel). Ten sam warunek sprawdza serwer przy synchronizacji.
+const ICS_HOSTS = RUNTIME_CONFIG.icsAllowedHosts;
+
+function icsHostAllowed(value: string): boolean {
+  if (ICS_HOSTS === null) return true;
+  try {
+    return ICS_HOSTS.includes(new URL(value).hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
 
 const addSchema = z.object({
   name: z.string().min(1, 'Nazwa jest wymagana').max(80),
@@ -27,6 +41,9 @@ const addSchema = z.object({
     .url('Podaj poprawny URL')
     .refine((v) => v.includes('.ics') || v.includes('ical') || v.includes('webcal'), {
       message: 'URL powinien wskazywać na plik ICS / iCal',
+    })
+    .refine(icsHostAllowed, {
+      message: `Host kalendarza spoza listy dozwolonych na serwerze biura (${ICS_HOSTS?.join(', ') || 'lista pusta'}).`,
     }),
 });
 type AddForm = z.infer<typeof addSchema>;
@@ -97,6 +114,11 @@ export function AddIcsSourceDialog({ open, onClose }: { open: boolean; onClose: 
               {...register('url')}
             />
             {errors.url && <p className="text-xs text-destructive">{errors.url.message}</p>}
+            {ICS_HOSTS !== null && (
+              <p className="text-xs text-muted-foreground">
+                Dozwolone hosty: {ICS_HOSTS.join(', ') || 'brak - admin biura dodaje je w panelu serwera'}.
+              </p>
+            )}
           </div>
           <GoogleHint />
           <DialogFooter>

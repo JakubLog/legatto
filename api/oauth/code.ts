@@ -14,18 +14,19 @@ import { isAal2Session } from '../_lib/jwt.js';
 import { isMcpRole } from '../_lib/auth.js';
 import { CODE_CHALLENGE_S256_RE, parseRedirectUri, stringParam } from '../_lib/oauth.js';
 import { getSiteIdentity, mpForms } from '../_lib/siteIdentity.js';
-import { rejectIfAiDisabled } from '../_lib/instance.js';
+import { rejectIfMcpDisabled } from '../_lib/instance.js';
+import { errorSummary } from '../_lib/log-safe.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   return handlerInner(req, res).catch((err) => {
-    console.error('[oauth/code] unhandled crash', err);
+    console.error('[oauth/code] unhandled crash', errorSummary(err));
     try { res.status(500).json({ error: 'server_error' }); } catch { /* already sent */ }
   });
 }
 
 async function handlerInner(req: VercelRequest, res: VercelResponse) {
-  // OAuth sluzy tylko klientom MCP (Claude) - bez AI na instancji nie istnieje.
-  if (rejectIfAiDisabled(res)) return;
+  // OAuth sluzy tylko klientom MCP - bez MCP na instancji nie istnieje.
+  if (rejectIfMcpDisabled(res)) return;
   // Bez CORS: wolany tylko z SPA na tym samym originie (sesja Supabase), obce strony nie czytaja odpowiedzi.
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' });
 
@@ -92,7 +93,7 @@ async function handlerInner(req: VercelRequest, res: VercelResponse) {
     .maybeSingle();
 
   if (clientErr) {
-    console.error('[oauth/code] client lookup error', clientErr);
+    console.error('[oauth/code] client lookup error', errorSummary(clientErr));
     return res.status(500).json({ error: 'server_error' });
   }
   if (!client || client.revoked_at) {
@@ -134,7 +135,7 @@ async function handlerInner(req: VercelRequest, res: VercelResponse) {
   });
 
   if (insertErr) {
-    console.error('[oauth/code] insert error', insertErr);
+    console.error('[oauth/code] insert error', errorSummary(insertErr));
     return res.status(500).json({ error: 'server_error' });
   }
 
@@ -147,7 +148,7 @@ async function handlerInner(req: VercelRequest, res: VercelResponse) {
     p_metadata: { client_id: clientId, redirect_host: callbackUrl.host, scope },
   });
   if (auditErr) {
-    console.error('[oauth/code] audit error', auditErr);
+    console.error('[oauth/code] audit error', errorSummary(auditErr));
     // Bez wpisu w audycie kod nie moze zostac uzyty - usuwamy go (fail-closed).
     await supabase.from('oauth_codes').delete().eq('code', code);
     return res.status(500).json({ error: 'server_error' });

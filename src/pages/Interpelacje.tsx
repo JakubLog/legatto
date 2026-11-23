@@ -199,14 +199,14 @@ export default function Interpelacje() {
       </div>
       <p className="max-w-md text-sm text-muted-foreground">
         {items.length === 0
-          ? INSTANCE.ai
+          ? INSTANCE.mcp
             ? 'Brak interpelacji. Pracownik dodaje je w portalu albo wgrywa przez Claude połączone z portalem biura przez MCP.'
             : 'Brak interpelacji. Pracownik dodaje je przyciskiem „Dodaj interpelację”.'
           : statusFilter === 'active' && activeRecipient === null
             ? 'Brak interpelacji w toku.'
             : 'Brak interpelacji w wybranym widoku.'}
       </p>
-      {items.length === 0 && (uploader || (writer && INSTANCE.ai)) ? (
+      {items.length === 0 && (uploader || (writer && INSTANCE.mcp)) ? (
         <div className="flex flex-wrap justify-center gap-2">
           {uploader && (
             <Button size="sm" onClick={() => setUploadOpen(true)}>
@@ -214,7 +214,7 @@ export default function Interpelacje() {
               Dodaj interpelację
             </Button>
           )}
-          {writer && INSTANCE.ai && (
+          {writer && INSTANCE.mcp && (
             // Integracje MCP są tylko na desktopie - na telefonie bez odnośnika.
             <Button size="sm" variant="outline" className="max-md:hidden" asChild>
               <Link to="/biuro/admin/integracje/mcp">
@@ -240,7 +240,7 @@ export default function Interpelacje() {
         // Opis obiegu tylko przy szerokim obszarze modułu; na telefonie zabierałby trzy linie nad listą.
         description={
           <span className="@max-md:hidden">
-            {INSTANCE.ai ? 'Pracownik dodaje interpelację w portalu albo wgrywa ją przez Claude (MCP).' : 'Pracownik dodaje interpelację w portalu.'}{' '}
+            {INSTANCE.mcp ? 'Pracownik dodaje interpelację w portalu albo wgrywa ją przez Claude (MCP).' : 'Pracownik dodaje interpelację w portalu.'}{' '}
             {mp.nominative} akceptuje ją, zgłasza uwagi albo odrzuca; zaakceptowana czeka na wysłanie.
           </span>
         }

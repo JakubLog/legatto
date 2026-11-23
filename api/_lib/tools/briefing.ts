@@ -1,4 +1,6 @@
 import { getServiceClient } from '../supabase.js';
+import { DbError } from '../log-safe.js';
+import { instanceFlags } from '../instance.js';
 import { applyDataScope } from '../access.js';
 import { isPoselRole, type McpAuthContext } from '../auth.js';
 import { getSiteIdentity, mpForms, type MpForms } from '../siteIdentity.js';
@@ -166,6 +168,8 @@ function grSendTimes(body: unknown[], now: number): Map<string, number> {
 }
 
 async function fetchGrNewsletters(): Promise<unknown[] | null> {
+  // INSTANCE_GETRESPONSE=off: bez zapytań do GetResponse (sygnał tylko z newsletter_issues).
+  if (!instanceFlags().getresponse) return null;
   try {
     const { data, error } = await getServiceClient().rpc('service_get_secrets', { p_keys: ['getresponse_api_key'] });
     if (error) return null;
@@ -251,7 +255,7 @@ function toArea(row: PulseRow): Area {
 // cotygodniowej wysylki (gorszy poziom wygrywa), jak mergeNewsletter we froncie.
 async function loadAreas(ownerId: string | null): Promise<AreasResult> {
   const { data, error } = await getServiceClient().rpc('service_module_pulse');
-  if (error) throw new Error(error.message);
+  if (error) throw new DbError(error);
   const rows = ((data ?? []) as PulseRow[]).filter(
     (row) => ownerId === null || (row.owner_activity ?? []).some((o) => o.user_id === ownerId),
   );
@@ -309,7 +313,7 @@ async function powiatyWithoutPresence(ctx: McpAuthContext): Promise<{ dni: numbe
     .select('value')
     .eq('key', 'visibility_alert_days')
     .maybeSingle();
-  if (setting.error) throw new Error(setting.error.message);
+  if (setting.error) throw new DbError(setting.error);
   const parsed = Number(setting.data?.value);
   const days = Number.isInteger(parsed) && parsed > 0 ? parsed : 90;
   const from = new Date(Date.now() - days * DAY_MS).toISOString();
@@ -327,8 +331,8 @@ async function powiatyWithoutPresence(ctx: McpAuthContext): Promise<{ dni: numbe
       'events',
     ),
   ]);
-  if (powiatyRes.error) throw new Error(powiatyRes.error.message);
-  if (eventsRes.error) throw new Error(eventsRes.error.message);
+  if (powiatyRes.error) throw new DbError(powiatyRes.error);
+  if (eventsRes.error) throw new DbError(eventsRes.error);
 
   const covered = new Set(((eventsRes.data ?? []) as Array<{ powiat_id: number }>).map((e) => e.powiat_id));
   const powiaty = ((powiatyRes.data ?? []) as Array<{ id: number; name: string }>)
@@ -348,7 +352,7 @@ async function upcomingEventsCount(ctx: McpAuthContext): Promise<number> {
     ctx,
     'events',
   );
-  if (error) throw new Error(error.message);
+  if (error) throw new DbError(error);
   return count ?? 0;
 }
 
@@ -362,7 +366,7 @@ async function overdueAcceptedCount(ctx: McpAuthContext): Promise<number> {
     ctx,
     'interpellations',
   );
-  if (error) throw new Error(error.message);
+  if (error) throw new DbError(error);
   return count ?? 0;
 }
 
@@ -419,10 +423,10 @@ async function poselBriefing(ctx: McpAuthContext, days: number) {
       'events',
     ),
   ]);
-  if (decideRes.error) throw new Error(decideRes.error.message);
-  if (overdueRes.error) throw new Error(overdueRes.error.message);
-  if (casesRes.error) throw new Error(casesRes.error.message);
-  if (eventsRes.error) throw new Error(eventsRes.error.message);
+  if (decideRes.error) throw new DbError(decideRes.error);
+  if (overdueRes.error) throw new DbError(overdueRes.error);
+  if (casesRes.error) throw new DbError(casesRes.error);
+  if (eventsRes.error) throw new DbError(eventsRes.error);
 
   const areas = worstFirst(pulse.areas);
   const toDecide = decideRes.count ?? decideRes.data?.length ?? 0;
@@ -515,9 +519,9 @@ async function pracownikBriefing(ctx: McpAuthContext, days: number) {
       .order('submitted_at', { ascending: false })
       .limit(20),
   ]);
-  if (casesRes.error) throw new Error(casesRes.error.message);
-  if (eventsRes.error) throw new Error(eventsRes.error.message);
-  if (interpellationsRes.error) throw new Error(interpellationsRes.error.message);
+  if (casesRes.error) throw new DbError(casesRes.error);
+  if (eventsRes.error) throw new DbError(eventsRes.error);
+  if (interpellationsRes.error) throw new DbError(interpellationsRes.error);
 
   const areas = worstFirst(pulse.areas);
   const needsAction = (module: string) => areas.some((a) => a.obszar === module && a.sygnal !== 'ok');
@@ -679,7 +683,7 @@ export const briefingTools: ToolDefinition[] = [
         .select('id, full_name, role, is_active')
         .eq('id', userId)
         .maybeSingle();
-      if (profileRes.error) throw new Error(profileRes.error.message);
+      if (profileRes.error) throw new DbError(profileRes.error);
       if (!profileRes.data) throw new ToolValidationError(`Nie znaleziono użytkownika o id=${userId}.`);
       const profile = profileRes.data as { id: string; full_name: string | null; role: string; is_active: boolean };
 
@@ -688,7 +692,7 @@ export const briefingTools: ToolDefinition[] = [
         supabase.rpc('service_person_pulse', { p_user_id: profile.id }),
         getSiteIdentity(),
       ]);
-      if (trendRes.error) throw new Error(trendRes.error.message);
+      if (trendRes.error) throw new DbError(trendRes.error);
 
       const trend = ((trendRes.data ?? []) as PersonPulseRow[]).map((row) => ({
         miara: METRIC_LABELS[row.metric] ?? row.metric,

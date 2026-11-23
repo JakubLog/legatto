@@ -15,7 +15,9 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { corsHeadersFor } from '../_shared/cors.ts';
+import { adminSurfaceGuard } from '../_shared/surface.ts';
 import { isCallerAal2, isCallerPoselRole, POSEL_ONLY_MESSAGE, serviceAudit, UUID_RE } from '../_shared/auth.ts';
+import { errorSummary } from '../_shared/log-safe.ts';
 
 interface RequestBody {
   user_id?: unknown;
@@ -29,6 +31,9 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: cors });
   }
+  // Na VPS tylko z hosta admin (A5); na crm 404 jak blokada proxy.
+  const surfaceDenied = adminSurfaceGuard(req, cors);
+  if (surfaceDenied) return surfaceDenied;
 
   const json = (body: unknown, status: number) =>
     new Response(JSON.stringify(body), {
@@ -62,7 +67,7 @@ Deno.serve(async (req) => {
 
     const { data: isPoselData, error: roleError } = await callerClient.rpc('is_posel');
     if (roleError) {
-      console.error('is_posel rpc error', roleError);
+      console.error('is_posel rpc error', errorSummary(roleError));
       return json({ error: 'Nie udało się zweryfikować uprawnien' }, 500);
     }
     if (isPoselData !== true) {
@@ -93,7 +98,7 @@ Deno.serve(async (req) => {
       .eq('id', userId)
       .maybeSingle();
     if (targetError) {
-      console.error('profile lookup error', targetError);
+      console.error('profile lookup error', errorSummary(targetError));
       return json({ error: 'Nie udało się pobrać profilu' }, 500);
     }
 
@@ -112,7 +117,7 @@ Deno.serve(async (req) => {
         { p_exclude: userId },
       );
       if (countError) {
-        console.error('last posel check error', countError);
+        console.error('last posel check error', errorSummary(countError));
         return json({ error: 'Nie udało się zweryfikować kont Posłów' }, 500);
       }
       if (otherRealPosel !== true) {
@@ -122,7 +127,7 @@ Deno.serve(async (req) => {
 
     const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
     if (deleteError) {
-      console.error('deleteUser error', deleteError);
+      console.error('deleteUser error', errorSummary(deleteError));
       // Wyscig z pre-checkiem: GoTrue przekazuje sqlstate triggera w polu code.
       if ('code' in deleteError && deleteError.code === '23514') {
         return json({ error: LAST_POSEL_MESSAGE }, 409);
@@ -136,7 +141,7 @@ Deno.serve(async (req) => {
 
     return json({ success: true }, 200);
   } catch (err) {
-    console.error('admin-delete-user error', err);
+    console.error('admin-delete-user error', errorSummary(err));
     return json({ error: 'Wystąpił nieoczekiwany błąd. Skontaktuj się z administratorem.' }, 500);
   }
 });

@@ -21,6 +21,7 @@ import { isPoselRole, loadAuthProfile, parseBearer } from './_lib/auth.js';
 import { resolveIssuer } from './_lib/issuer.js';
 import { isAal2Session } from './_lib/jwt.js';
 import { getAnonClient, getServiceClient } from './_lib/supabase.js';
+import { DbError, errorSummary } from './_lib/log-safe.js';
 import { instanceFlags } from './_lib/instance.js';
 import { deliver, dispatchPending, finalize, loadDispatchContext, OutboxRow } from './_lib/notifications/dispatch.js';
 import { countPushDevices } from './_lib/notifications/push.js';
@@ -128,7 +129,7 @@ async function handleTest(user: SessionUser, body: unknown) {
     .single();
   if (inserted.error) {
     if (inserted.error.code === '23505') throw new ApiError(429, 'limit', 'Kolejny test za minutę.');
-    throw new Error(`notification_outbox: ${inserted.error.message}`);
+    throw new DbError(inserted.error, 'notification_outbox');
   }
   const row = OutboxRow.parse(inserted.data);
   const outcome = await deliver(row, { id: user.id, email: user.email, full_name: null, is_active: true }, ctx);
@@ -161,7 +162,7 @@ async function handleAdminStatus(user: SessionUser) {
     emailOn ? loadResendKey() : Promise.resolve(''),
     getServiceClient().rpc('notifications_admin_overview'),
   ]);
-  if (overviewRes.error) throw new Error(`notifications_admin_overview: ${overviewRes.error.message}`);
+  if (overviewRes.error) throw new DbError(overviewRes.error, 'notifications_admin_overview');
   const overview = AdminOverview.parse(overviewRes.data);
   // Rejestracja (albo poprawka po zmianie domeny) przy każdym podglądzie panelu - adres tylko z env.
   const registered = await syncDispatchRegistration();
@@ -191,7 +192,7 @@ async function handleAdminSave(req: VercelRequest, user: SessionUser) {
     .upsert({ key: SETTINGS_KEY, value: next, updated_by: user.id, updated_at: new Date().toISOString() });
   if (error) {
     if (error.code === '42501') throw new ApiError(403, 'brak_uprawnien', 'Brak uprawnień do zmiany ustawień');
-    throw new Error(`app_settings: ${error.message}`);
+    throw new DbError(error, 'app_settings');
   }
   await syncDispatchRegistration();
   if (next.push_enabled) await ensureVapidKeys();
@@ -238,7 +239,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   } catch (err) {
     if (err instanceof ApiError) return res.status(err.status).json({ error: err.code, message: err.message });
-    console.error('[notifications] error', op, err instanceof Error ? err.message : err);
+    console.error('[notifications] error', op, errorSummary(err));
     return res.status(500).json({ error: 'blad_serwera', message: 'Błąd serwera powiadomień' });
   }
 }

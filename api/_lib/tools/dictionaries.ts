@@ -1,9 +1,10 @@
 import { getServiceClient } from '../supabase.js';
+import { DbError } from '../log-safe.js';
 import { type ToolDefinition, jsonResult, optionalNumber, ToolValidationError } from './types.js';
 
 async function listCategories(table: 'case_categories' | 'expense_categories') {
   const { data, error } = await getServiceClient().from(table).select('id, name').order('id');
-  if (error) throw new Error(error.message);
+  if (error) throw new DbError(error);
   return data ?? [];
 }
 
@@ -45,7 +46,7 @@ export const dictionariesTools: ToolDefinition[] = [
         .from('powiaty')
         .select('id, name, is_city')
         .order('id');
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       return jsonResult({ powiaty: data ?? [] });
     },
   },
@@ -76,7 +77,7 @@ export const dictionariesTools: ToolDefinition[] = [
         .select('id, name, type')
         .eq('powiat_id', powiatId)
         .order('name');
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       return jsonResult({ powiat_id: powiatId, gminy: data ?? [] });
     },
   },

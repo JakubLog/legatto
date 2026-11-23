@@ -170,8 +170,9 @@ console.log(`
 2. supabase functions deploy --project-ref ${ref}                     (Edge Functions; db push ich nie wdraża)
 3. Supabase → Database → Network restrictions: zawęź dostęp do Postgresa (aplikacja używa tylko HTTPS API).
 4. Vercel: projekt z repo, zmienne z .env.example (VITE_SUPABASE_URL=https://${ref}.supabase.co, klucze, CRON_SECRET,
-   INSTANCE_AI=on|off, INSTANCE_EMAIL=on|off - brak = off; opcjonalnie OAUTH_ISSUER=${origin}), domena ${domain};
+   INSTANCE_AI, INSTANCE_MCP, INSTANCE_EMAIL = on|off - brak = off; opcjonalnie INSTANCE_PUSH/GETRESPONSE/ICS, ICS_ALLOWED_HOSTS,
+   OAUTH_ISSUER=${origin}), domena ${domain};
    alias *.vercel.app przekieruj na domenę albo usuń. Zmiana INSTANCE_* wymaga ponownego wdrożenia.
 5. Plan Pro: kopie zapasowe / PITR, HIBP, limity sesji (potem uruchom ten skrypt ponownie).
-6. Kontrola: node scripts/instances/doctor.mjs ${domain} ${ref} --ai=on|off`);
+6. Kontrola: node scripts/instances/doctor.mjs ${domain} ${ref} --ai=on|off --mcp=on|off`);
 if (warnings.length) console.log(`\n== Ostrzeżenia\n${warnings.map((w) => `- ${w}`).join('\n')}`);

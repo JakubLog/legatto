@@ -3,7 +3,7 @@ import { publicContainer, publicInner, publicSkeleton } from '@/components/publi
 
 /**
  * Szkielet strony publicznej (hero) - fallback lazy-loadingu w PublicLayout
- * i stan ładowania treści strony (useSiteContent) w HomePage, żeby nie mignęły neutralne domyślne teksty.
+ * i stan ładowania treści strony (usePublicSite) w HomePage, żeby nie mignęły neutralne domyślne teksty.
  */
 export function PublicPageSkeleton() {
   return (

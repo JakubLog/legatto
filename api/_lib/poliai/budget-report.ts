@@ -11,6 +11,7 @@
 import { z } from 'zod';
 import type { McpAuthContext } from '../auth.js';
 import { getServiceClient } from '../supabase.js';
+import { DbError, errorSummary } from '../log-safe.js';
 import { AnthropicApiError, structuredOutput } from './anthropic.js';
 import { enforceDailyLimit, HttpError, type AiSettings } from './session.js';
 
@@ -359,7 +360,7 @@ async function loadAnalytics(month: string): Promise<{ raw: unknown; core: Analy
   if (error) {
     if (error.message.includes('Miesiąc z przyszłości')) throw new HttpError(400, 'Nie można przygotować raportu za przyszły miesiąc.');
     if (error.message.includes('Nieprawidłowy miesiąc')) throw new HttpError(400, 'Nieprawidłowy miesiąc');
-    throw new Error(`service_budget_analytics: ${error.message}`);
+    throw new DbError(error, 'service_budget_analytics');
   }
   return { raw: data, core: AnalyticsSchema.parse(data) };
 }
@@ -371,7 +372,7 @@ async function loadMonthlyLimit(): Promise<number> {
     .select('value')
     .eq('key', 'budget_settings')
     .maybeSingle();
-  if (error) throw new Error(`app_settings budget_settings: ${error.message}`);
+  if (error) throw new DbError(error, 'app_settings budget_settings');
   const parsed = BudgetSettingsSchema.safeParse(data?.value);
   return parsed.success ? parsed.data.monthly_limit_pln : DEFAULT_MONTHLY_LIMIT_PLN;
 }
@@ -388,7 +389,7 @@ async function loadExpenses(month: string): Promise<{ rows: ReportExpense[]; tru
     .order('expense_date', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(MAX_EXPENSE_ROWS + 1);
-  if (error) throw new Error(`office_expenses: ${error.message}`);
+  if (error) throw new DbError(error, 'office_expenses');
   const rows = z.array(ExpenseRowSchema).parse(data ?? []);
   return { rows: rows.slice(0, MAX_EXPENSE_ROWS), truncated: rows.length > MAX_EXPENSE_ROWS };
 }
@@ -399,7 +400,7 @@ function modelError(err: unknown): HttpError {
   if (err instanceof Error && err.name === 'TimeoutError') {
     return new HttpError(504, 'Przygotowanie raportu trwało za długo. Spróbuj ponownie.');
   }
-  console.error('[poliai] budget report model call failed', err instanceof Error ? err.message : err);
+  console.error('[poliai] budget report model call failed', errorSummary(err));
   return new HttpError(502, 'Nie udało się przygotować raportu. Spróbuj ponownie.');
 }
 
@@ -467,6 +468,6 @@ export async function generateBudgetReport(
     .insert({ period: month, content, analytics: snapshot, model: settings.model, created_by: ctx.userId })
     .select()
     .single();
-  if (error) throw new Error(`budget_reports insert: ${error.message}`);
+  if (error) throw new DbError(error, 'budget_reports insert');
   return { report: data as BudgetReportRow };
 }

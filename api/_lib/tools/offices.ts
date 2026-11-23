@@ -1,4 +1,5 @@
 import { getServiceClient } from '../supabase.js';
+import { DbError } from '../log-safe.js';
 import { logAudit } from '../audit.js';
 import {
   type ToolDefinition,
@@ -19,7 +20,7 @@ async function clearMainOffice(exceptId: string | null): Promise<void> {
   let q = supabase.from('offices').update({ is_main: false }).eq('is_main', true);
   if (exceptId) q = q.neq('id', exceptId);
   const { error } = await q;
-  if (error) throw new Error(error.message);
+  if (error) throw new DbError(error);
 }
 
 export const officesTools: ToolDefinition[] = [
@@ -46,7 +47,7 @@ export const officesTools: ToolDefinition[] = [
         .order('name');
       if (args.include_inactive !== true) q = q.eq('is_active', true);
       const { data, error } = await q;
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       const offices = data ?? [];
       if (args.include_staff !== true) return jsonResult({ count: offices.length, offices });
 
@@ -56,7 +57,7 @@ export const officesTools: ToolDefinition[] = [
         .eq('is_active', true)
         .not('office_id', 'is', null)
         .order('full_name');
-      if (staffError) throw new Error(staffError.message);
+      if (staffError) throw new DbError(staffError);
       return jsonResult({
         count: offices.length,
         offices: offices.map((o) => ({
@@ -103,7 +104,7 @@ export const officesTools: ToolDefinition[] = [
       if (isMain) await clearMainOffice(null);
       const supabase = getServiceClient();
       const { data, error } = await supabase.from('offices').insert(insert).select(OFFICE_COLUMNS).single();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       await logAudit(ctx, 'mcp.office_create', {
         entityType: 'office',
         entityId: data.id,
@@ -157,12 +158,12 @@ export const officesTools: ToolDefinition[] = [
         .select('id')
         .eq('id', id)
         .maybeSingle();
-      if (existingError) throw new Error(existingError.message);
+      if (existingError) throw new DbError(existingError);
       if (!existing) return textResult(`Biuro o id=${id} nie istnieje.`, true);
 
       if (isMain === true) await clearMainOffice(id);
       const { data, error } = await supabase.from('offices').update(update).eq('id', id).select(OFFICE_COLUMNS).single();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       await logAudit(ctx, 'mcp.office_update', {
         entityType: 'office',
         entityId: id,

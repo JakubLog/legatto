@@ -1,0 +1,80 @@
+name: release
+
+# Referencyjny build obrazów wydania VPS (A3, R6). Bez sekretów i bez publikacji: obrazy NIE trafiają
+# do rejestru. Artefakt to release.json + digests.json + SBOM (CycloneDX); legatto-infra przypina
+# release.json w release/app.lock (release/lib/applock.py) i przy `release/build.sh` przebudowuje
+# obrazy z tego commitu - wynik musi być bajtowo identyczny. Atestacja pochodzenia (OIDC, bez
+# długich sekretów) tylko dla tagów, w osobnym jobie z minimalnymi uprawnieniami.
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Wersja (tag v<package.json version>)
+        id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          if [[ "$REF_TYPE" == tag && "$REF_NAME" != "v$version" ]]; then
+            echo "tag $REF_NAME ≠ v$version z package.json" >&2
+            exit 2
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - run: scripts/ci/install-syft.sh "$RUNNER_TEMP/bin" && echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: build-images.sh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          scripts/release/build-images.sh --version "$VERSION" --out "$RUNNER_TEMP/release" --platform linux/amd64
+          sha256sum "$RUNNER_TEMP/release/release.json" "$RUNNER_TEMP/release/digests.json" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: legatto-app-release-${{ steps.version.outputs.version }}
+          path: |
+            ${{ runner.temp }}/release/release.json
+            ${{ runner.temp }}/release/digests.json
+            ${{ runner.temp }}/release/sbom/
+          if-no-files-found: error
+          retention-days: 90
+
+  attest:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # atestacja pochodzenia przez OIDC, bez długoterminowego sekretu
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: legatto-app-release-${{ needs.build.outputs.version }}
+          path: release
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            release/release.json
+            release/digests.json

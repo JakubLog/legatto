@@ -110,10 +110,15 @@ interface Props extends UserRowHandlers {
   isLinkPending: boolean;
   /** Czy zalogowany może zmieniać konta Posłów (tylko rola 'posel'; Administrator nie). */
   canManagePosel: boolean;
+  /**
+   * Akcje wrażliwe (link logowania, reset 2FA, wylogowanie, usunięcie konta). Na powierzchni CRM
+   * (VPS) są niedostępne - wykonuje je tylko panel administracyjny (lib/adminSurface).
+   */
+  sensitiveActions: boolean;
 }
 
 /** Kompaktowy wiersz listy zespołu: avatar, dane, pigułki roli/statusu, akcje. */
-export function UserRow({ user: u, isMe, isLinkPending, canManagePosel, ...h }: Props) {
+export function UserRow({ user: u, isMe, isLinkPending, canManagePosel, sensitiveActions, ...h }: Props) {
   const mp = useMpForms();
   // Konto Posła: Administrator widzi tylko akcje, których serwer mu nie blokuje
   // (edycja profilu, szczegóły, biuro). Rolę 'posel' nadaje tylko Poseł.
@@ -168,21 +173,23 @@ export function UserRow({ user: u, isMe, isLinkPending, canManagePosel, ...h }: 
               <Pencil className="h-3.5 w-3.5" />
             </Button>
             {/* Wyłączony przycisk nie łapie hovera - podpowiedź na opakowaniu. */}
-            <span className="inline-flex" title={poselLocked ? lockHint : undefined}>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={ICON_BTN}
-                disabled={isLinkPending || poselLocked}
-                onClick={() => h.onSendLink(u)}
-                title={u.password_set ? 'Wyślij link resetu hasła' : 'Wyślij zaproszenie'}
-                aria-label={poselLocked ? lockHint : (u.password_set ? 'Wyślij link resetu hasła' : 'Wyślij zaproszenie')}
-              >
-                {isLinkPending
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  : <Mail className="h-3.5 w-3.5" />}
-              </Button>
-            </span>
+            {sensitiveActions && (
+              <span className="inline-flex" title={poselLocked ? lockHint : undefined}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={ICON_BTN}
+                  disabled={isLinkPending || poselLocked}
+                  onClick={() => h.onSendLink(u)}
+                  title={u.password_set ? 'Wyślij link resetu hasła' : 'Wyślij zaproszenie'}
+                  aria-label={poselLocked ? lockHint : (u.password_set ? 'Wyślij link resetu hasła' : 'Wyślij zaproszenie')}
+                >
+                  {isLinkPending
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <Mail className="h-3.5 w-3.5" />}
+                </Button>
+              </span>
+            )}
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -194,7 +201,7 @@ export function UserRow({ user: u, isMe, isLinkPending, canManagePosel, ...h }: 
               <DropdownMenuItem className="md:hidden" onClick={() => h.onEdit(u)}>
                 <Pencil className="h-4 w-4" />Edytuj profil
               </DropdownMenuItem>
-              {!poselLocked && (
+              {!poselLocked && sensitiveActions && (
                 <DropdownMenuItem className="md:hidden" disabled={isLinkPending} onClick={() => h.onSendLink(u)}>
                   <Mail className="h-4 w-4" />
                   {u.password_set ? 'Wyślij link resetu hasła' : 'Wyślij zaproszenie'}
@@ -221,16 +228,20 @@ export function UserRow({ user: u, isMe, isLinkPending, canManagePosel, ...h }: 
                   <DropdownMenuItem onClick={() => h.onToggleActive(u)}>
                     {u.is_active ? 'Deaktywuj konto' : 'Aktywuj konto'}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => h.onResetMfa(u)}>
-                    <KeyRound className="h-4 w-4" />Resetuj 2FA
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => h.onRevokeSessions(u)} className="text-destructive focus:text-destructive">
-                    <LogOut className="h-4 w-4" />Wyloguj ze wszystkich urządzeń
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => h.onDelete(u)} className="text-destructive focus:text-destructive">
-                    <Trash2 className="h-4 w-4" />Usuń konto trwale
-                  </DropdownMenuItem>
+                  {sensitiveActions && (
+                    <>
+                      <DropdownMenuItem onClick={() => h.onResetMfa(u)}>
+                        <KeyRound className="h-4 w-4" />Resetuj 2FA
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => h.onRevokeSessions(u)} className="text-destructive focus:text-destructive">
+                        <LogOut className="h-4 w-4" />Wyloguj ze wszystkich urządzeń
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => h.onDelete(u)} className="text-destructive focus:text-destructive">
+                        <Trash2 className="h-4 w-4" />Usuń konto trwale
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </>
               )}
             </DropdownMenuContent>

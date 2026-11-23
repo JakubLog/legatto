@@ -12,6 +12,7 @@ import { AuthHeader, AuthLayout } from '@/components/auth/AuthLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useChallengeAndVerifyTotp } from '@/hooks/useMfa';
 import { mailtoHref } from '@/lib/mailto';
+import { RUNTIME_CONFIG } from '@/lib/runtime-config';
 
 const schema = z.object({
   code: z
@@ -20,9 +21,9 @@ const schema = z.object({
 });
 type Values = z.infer<typeof schema>;
 
-// Kontakt w sprawie utraconego klucza 2FA: opcjonalny adres z builda instancji.
+// Kontakt w sprawie utraconego klucza 2FA: opcjonalny adres z konfiguracji instancji (runtime-config).
 // Bez niego ekran odsyła do Posła/Administratora biura (reset w panelu Użytkownicy).
-const SUPPORT_MAILTO = mailtoHref(import.meta.env.VITE_SUPPORT_EMAIL);
+const SUPPORT_MAILTO = mailtoHref(RUNTIME_CONFIG.supportEmail || undefined);
 
 export function MfaChallengeScreen() {
   const { profile, mfa, refreshMfa, signOut } = useAuth();

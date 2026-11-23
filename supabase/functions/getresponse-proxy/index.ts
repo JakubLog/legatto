@@ -22,7 +22,8 @@
 //   GR_ID_RE i jest dodatkowo encodeURIComponent w sciezce (brak path traversal);
 // - kontakty z bazy czytane klientem wywolujacego (RLS: data_scope + aal2); service_role
 //   tylko do zapisu gr_contact_id po udanym odczycie przez RLS;
-// - klient dostaje ogolne komunikaty bledow, szczegoly (body GR, bledy DB) ida do console.error;
+// - klient dostaje ogolne komunikaty bledow; do console.error tylko status HTTP i kod bledu
+//   (GR, Postgres) - bez body GR, tresci bledow DB, adresow i identyfikatorow kontaktow;
 // - prawdziwa wysylka i usuwanie newslettera: tylko Posel/Administrator albo opiekun obszaru
 //   'newsletter' (module_owners) - predykat bazy can_manage_newsletters(); wysylka testowa:
 //   oni na adres aktywnego czlonka zespolu (profiles.email, is_active), pozostali writerzy
@@ -30,11 +31,14 @@
 //   (liczony z audit_log, wpis przed wysylka) - proxy nie moze sluzyc do mailingu;
 // - wysylka wydania (newsletter_issues): proxy (service_role) rezerwuje szkic atomowo
 //   (status 'draft' -> 'sending'), po sukcesie w GR ustawia 'sent', po odrzuceniu przez GR
-//   cofa do 'draft'; audyt newsletter.send zapisuje sha256 wyslanej tresci i liste.
+//   cofa do 'draft'; audyt newsletter.send zapisuje sha256 wyslanej tresci i liste;
+// - przy stronie posla (public_site_url() niepusty) wysylka wydania wymaga web_published_at
+//   (wersja online opublikowana na stronie, migracja 20261121220000_site_publish.sql) - inaczej 409.
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { corsHeadersFor } from '../_shared/cors.ts';
 import { isCallerAal2, serviceAudit, UUID_RE } from '../_shared/auth.ts';
+import { errorSummary } from '../_shared/log-safe.ts';
 
 const GR_BASE = 'https://api.getresponse.com/v3';
 const GR_ID_RE = /^[A-Za-z0-9]{1,32}$/;
@@ -94,7 +98,10 @@ async function loadGrSettings(admin: SupabaseClient): Promise<GrSettings> {
     admin.from('app_settings').select('key,value').like('key', 'getresponse_%'),
   ]);
   const error = secretsRes.error ?? settingsRes.error;
-  if (error) throw new Error(`Nie udalo sie odczytac ustawien GR: ${error.message}`);
+  if (error) {
+    console.error('GR settings read error', errorSummary(error));
+    throw new Error('Nie udalo sie odczytac ustawien GR');
+  }
 
   const map: Record<string, string> = {};
   for (const row of settingsRes.data ?? []) {
@@ -150,7 +157,7 @@ async function findListContactId(apiKey: string, email: string, listId: string):
   });
   const r = await grRequest(apiKey, `/contacts?${sp}`);
   if (!r.ok) {
-    console.error('GR contact search error', r.status, JSON.stringify(r.body));
+    console.error('GR contact search error', r.status, errorSummary(r.body).code ?? '');
     return null;
   }
   const id = (r.body as Array<{ contactId?: unknown }> | null)?.[0]?.contactId;
@@ -188,18 +195,18 @@ async function removeTestContact(
   }
   if (!id) id = await findListContactId(apiKey, email, listId);
   if (!id) {
-    console.error('GR test contact cleanup: contact not found', listId);
+    console.error('GR test contact cleanup: contact not found');
     return;
   }
   const del = await grRequest(apiKey, `/contacts/${encodeURIComponent(id)}`, { method: 'DELETE' });
   if (!del.ok && del.status !== 404) {
-    console.error('GR test contact cleanup failed', id, del.status, JSON.stringify(del.body));
+    console.error('GR test contact cleanup failed', del.status, errorSummary(del.body).code ?? '');
   }
 }
 
 /** Uruchamia sprzatanie w tle (EdgeRuntime.waitUntil), a bez Edge Runtime - synchronicznie. */
 async function scheduleTestContactCleanup(cleanup: Promise<void>): Promise<void> {
-  const guarded = cleanup.catch((err) => console.error('GR test contact cleanup error', err));
+  const guarded = cleanup.catch((err) => console.error('GR test contact cleanup error', errorSummary(err)));
   if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime) {
     EdgeRuntime.waitUntil(guarded);
   } else {
@@ -214,7 +221,7 @@ async function scheduleTestContactCleanup(cleanup: Promise<void>): Promise<void>
 async function canManageNewsletters(callerClient: SupabaseClient): Promise<boolean> {
   const { data, error } = await callerClient.rpc('can_manage_newsletters');
   if (error) {
-    console.error('can_manage_newsletters rpc error', error);
+    console.error('can_manage_newsletters rpc error', errorSummary(error));
     return false;
   }
   return data === true;
@@ -228,7 +235,7 @@ async function isActiveStaffEmail(adminClient: SupabaseClient, email: string): P
     .eq('is_active', true)
     .not('email', 'is', null);
   if (error) {
-    console.error('profiles read error (test email)', error);
+    console.error('profiles read error (test email)', errorSummary(error));
     return false;
   }
   const wanted = email.toLowerCase();
@@ -249,9 +256,15 @@ Deno.serve(async (req) => {
       headers: { ...cors, 'Content-Type': 'application/json' },
     });
 
-  /** Blad GR: szczegoly do logow, klient dostaje ogolny komunikat + status HTTP GR. */
+  // INSTANCE_GETRESPONSE=off (VPS biura bez zgody admina na egress do GetResponse): funkcja nie
+  // istnieje. Brak zmiennej (Supabase Cloud) = włączona, jak dotąd.
+  if (Deno.env.get('INSTANCE_GETRESPONSE')?.trim().toLowerCase() === 'off') {
+    return json({ error: 'Integracja GetResponse jest wyłączona na tej instancji.', code: 'GETRESPONSE_DISABLED' }, 404);
+  }
+
+  /** Blad GR: do logow tylko status i kod bledu GR (tresc moze zawierac adresy kontaktow). */
   const grError = (message: string, context: string, r: { status: number; body: unknown }) => {
-    console.error(`GR API error (${context})`, r.status, JSON.stringify(r.body));
+    console.error(`GR API error (${context})`, r.status, errorSummary(r.body).code ?? '');
     return json({ error: message, status: r.status }, 502);
   };
 
@@ -279,7 +292,7 @@ Deno.serve(async (req) => {
 
     const { data: isWriter, error: roleError } = await callerClient.rpc('is_writer');
     if (roleError) {
-      console.error('is_writer rpc error', roleError);
+      console.error('is_writer rpc error', errorSummary(roleError));
       return json({ error: 'Nie udalo sie zweryfikowac uprawnien' }, 500);
     }
     if (isWriter !== true) {
@@ -313,7 +326,7 @@ Deno.serve(async (req) => {
       case 'check_status': {
         const r = await grRequest(settings.api_key, '/accounts');
         if (!r.ok) {
-          console.error('GR API error (check_status)', r.status, JSON.stringify(r.body));
+          console.error('GR API error (check_status)', r.status, errorSummary(r.body).code ?? '');
           return json({ ok: false, status: r.status }, 200);
         }
         const account = r.body as { accountId?: string; companyName?: string; email?: string };
@@ -403,6 +416,24 @@ Deno.serve(async (req) => {
           ? plain
           : html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100_000);
 
+        // Strona posla (app_settings.public_site_url, A8): wersja online wydania musi byc juz
+        // opublikowana na stronie (web_published_at ustawia publisher po udanym deployu), zanim mail
+        // z linkiem do niej trafi na liste. Bez public_site_url (Vercel) wersje online serwuje portal.
+        const [siteUrlRes, publishedRes] = await Promise.all([
+          adminClient.rpc('public_site_url'),
+          adminClient.from('newsletter_issues').select('web_published_at').eq('id', issueId).maybeSingle(),
+        ]);
+        if (siteUrlRes.error || publishedRes.error) {
+          console.error('newsletter publish check error (send)', issueId, errorSummary(siteUrlRes.error ?? publishedRes.error));
+          return json({ error: 'Nie udalo sie sprawdzic publikacji wersji online' }, 500);
+        }
+        if (
+          typeof siteUrlRes.data === 'string' && siteUrlRes.data !== '' &&
+          publishedRes.data && !publishedRes.data.web_published_at
+        ) {
+          return json({ error: 'Najpierw opublikuj wersję online na stronie posła' }, 409);
+        }
+
         // Rezerwacja zapisanego szkicu jednym UPDATE (draft -> sending): z rownoleglych wysylek
         // tego samego wydania przechodzi jedna, a od tej chwili nikt nie zmieni tematu ani wersji
         // online (klient zmienia tylko wiersze 'draft'). Temat bierzemy z zarezerwowanego wiersza.
@@ -413,7 +444,7 @@ Deno.serve(async (req) => {
           .eq('status', 'draft')
           .select('subject');
         if (reserveErr) {
-          console.error('newsletter_issues reserve error (send)', issueId, reserveErr);
+          console.error('newsletter_issues reserve error (send)', issueId, errorSummary(reserveErr));
           return json({ error: 'Nie udalo sie zarezerwowac wydania newslettera' }, 500);
         }
         if (!reserved || reserved.length === 0) {
@@ -423,7 +454,7 @@ Deno.serve(async (req) => {
             .eq('id', issueId)
             .maybeSingle();
           if (existingErr) {
-            console.error('newsletter_issues read error (send)', existingErr);
+            console.error('newsletter_issues read error (send)', errorSummary(existingErr));
             return json({ error: 'Nie udalo sie odczytac wydania newslettera' }, 500);
           }
           if (!existing) return json({ error: 'Nie znaleziono wydania newslettera' }, 404);
@@ -436,7 +467,7 @@ Deno.serve(async (req) => {
             .update({ status: 'draft' })
             .eq('id', issueId)
             .eq('status', 'sending');
-          if (error) console.error('newsletter_issues release error', issueId, error);
+          if (error) console.error('newsletter_issues release error', issueId, errorSummary(error));
         };
 
         const subject = typeof reserved[0].subject === 'string' ? reserved[0].subject.trim() : '';
@@ -499,7 +530,7 @@ Deno.serve(async (req) => {
           .eq('id', issueId)
           .eq('status', 'sending')
           .select('id');
-        if (markErr) console.error('newsletter_issues mark sent error', issueId, markErr);
+        if (markErr) console.error('newsletter_issues mark sent error', issueId, errorSummary(markErr));
         const issueMarked = !markErr && (marked?.length ?? 0) === 1;
 
         await serviceAudit(adminClient, callerId, 'newsletter.send', 'newsletter', issueId, {
@@ -578,7 +609,7 @@ Deno.serve(async (req) => {
           .eq('action', 'newsletter.send_test_attempt')
           .gte('created_at', new Date(Date.now() - 60 * 60 * 1000).toISOString());
         if (countErr) {
-          console.error('newsletter test limit count error', countErr);
+          console.error('newsletter test limit count error', errorSummary(countErr));
           return json({ error: 'Nie udalo sie sprawdzic limitu wysylek testowych' }, 500);
         }
         if ((recentTests ?? 0) >= TEST_SEND_HOURLY_LIMIT) {
@@ -653,7 +684,7 @@ Deno.serve(async (req) => {
         if (!r.ok) {
           if (createdForTest) {
             await removeTestContact(settings.api_key, email, listId, contactId, null).catch((err) =>
-              console.error('GR test contact cleanup error', err),
+              console.error('GR test contact cleanup error', errorSummary(err)),
             );
           }
           await serviceAudit(adminClient, callerId, 'newsletter.send_test_failed', 'newsletter', null, {
@@ -733,7 +764,7 @@ Deno.serve(async (req) => {
           .eq('id', contactId)
           .maybeSingle();
 
-        if (contactErr) console.error('contact read error (sync)', contactErr);
+        if (contactErr) console.error('contact read error (sync)', errorSummary(contactErr));
         if (contactErr || !dbContact) return json({ error: 'Nie znaleziono kontaktu' }, 404);
         if (dbContact.newsletter_consent !== true) {
           return json({ error: 'Kontakt nie wyrazil zgody na newsletter', code: 'NO_CONSENT' }, 409);
@@ -774,7 +805,7 @@ Deno.serve(async (req) => {
             .from('contacts')
             .update({ gr_contact_id: grContactId })
             .eq('id', contactId);
-          if (updateErr) console.error('gr_contact_id update error (sync)', updateErr);
+          if (updateErr) console.error('gr_contact_id update error (sync)', errorSummary(updateErr));
         }
 
         await serviceAudit(adminClient, callerId, 'contact.gr_sync', 'contact', contactId, {
@@ -799,7 +830,7 @@ Deno.serve(async (req) => {
           .select('email, gr_contact_id')
           .eq('id', contactId)
           .maybeSingle();
-        if (contactErr) console.error('contact read error (unsync)', contactErr);
+        if (contactErr) console.error('contact read error (unsync)', errorSummary(contactErr));
         if (contactErr || !dbContact) return json({ error: 'Nie znaleziono kontaktu' }, 404);
 
         // Wyznacz GR contact ID - z bazy lub wyszukaj po emailu kontaktu z bazy (odczyt przez
@@ -832,7 +863,7 @@ Deno.serve(async (req) => {
             .from('contacts')
             .update({ gr_contact_id: null })
             .eq('id', contactId);
-          if (clearErr) console.error('gr_contact_id clear error (unsync)', clearErr);
+          if (clearErr) console.error('gr_contact_id clear error (unsync)', errorSummary(clearErr));
           return json({ ok: true, note: 'kontakt nie byl w GR' }, 200);
         }
 
@@ -849,7 +880,7 @@ Deno.serve(async (req) => {
           .from('contacts')
           .update({ gr_contact_id: null })
           .eq('id', contactId);
-        if (clearErr) console.error('gr_contact_id clear error (unsync)', clearErr);
+        if (clearErr) console.error('gr_contact_id clear error (unsync)', errorSummary(clearErr));
 
         await serviceAudit(adminClient, callerId, 'contact.gr_unsync', 'contact', contactId, {
           gr_contact_id: targetGrId,
@@ -862,7 +893,7 @@ Deno.serve(async (req) => {
         return json({ error: 'Nieznana akcja' }, 400);
     }
   } catch (err) {
-    console.error('getresponse-proxy error', err);
+    console.error('getresponse-proxy error', errorSummary(err));
     return json({ error: 'Wystapil nieoczekiwany blad' }, 500);
   }
 });

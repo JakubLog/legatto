@@ -1,4 +1,5 @@
 import { getServiceClient } from '../supabase.js';
+import { DbError } from '../log-safe.js';
 import { logAudit } from '../audit.js';
 import { isPoselRole } from '../auth.js';
 import {
@@ -61,7 +62,7 @@ async function validatedValue(key: WritableKey, value: unknown): Promise<unknown
     }
     const supabase = getServiceClient();
     const { data, error } = await supabase.from('app_settings').select('value').eq('key', key).maybeSingle();
-    if (error) throw new Error(error.message);
+    if (error) throw new DbError(error);
     const existing = (data?.value ?? {}) as Record<string, unknown>;
     for (const [field, fieldValue] of Object.entries(value)) {
       if (!(field in existing)) {
@@ -109,14 +110,14 @@ export const settingsTools: ToolDefinition[] = [
       else if (key !== null) q = q.eq('key', key);
       else q = q.in('key', [...READABLE_KEYS]);
       const { data, error } = await q;
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       // Klucze API sa w Vault (nie w app_settings): do odpowiedzi trafia tylko maska.
       let secretKeys: string[] = [];
       if (isPoselRole(ctx.userRole)) secretKeys = key === null ? Object.keys(SECRET_KEYS) : SECRET_KEYS[key] ? [key] : [];
       let secretRows: { key: string; value: string; updated_at: null }[] = [];
       if (secretKeys.length > 0) {
         const secrets = await supabase.rpc('service_get_secrets', { p_keys: secretKeys });
-        if (secrets.error) throw new Error(secrets.error.message);
+        if (secrets.error) throw new DbError(secrets.error);
         const values = new Map(((secrets.data ?? []) as { key: string; value: string }[]).map((r) => [r.key, r.value]));
         secretRows = secretKeys.map((k) => ({ key: k, value: maskSecret(values.get(k)), updated_at: null }));
       }
@@ -167,7 +168,7 @@ export const settingsTools: ToolDefinition[] = [
         .upsert({ key, value }, { onConflict: 'key' })
         .select('key, value, updated_at')
         .single();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       await logAudit(ctx, 'mcp.setting_update', {
         entityType: 'setting',
         metadata: { key, tool: 'settings_update' },

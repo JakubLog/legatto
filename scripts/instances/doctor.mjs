@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // Kontrola istniejącej instancji (jedna instancja = jeden poseł, ADR 026). TYLKO ODCZYT: wyłącznie żądania GET.
 //
-//   [SUPABASE_ACCESS_TOKEN=sbp_...] [SUPABASE_ANON_KEY=...] node scripts/instances/doctor.mjs <domena> <ref> [--ai=on|off]
+//   [SUPABASE_ACCESS_TOKEN=sbp_...] [SUPABASE_ANON_KEY=...] node scripts/instances/doctor.mjs <domena> <ref> [--ai=on|off] [--mcp=on|off]
 //
 // Bez tokenu Management API pomija kontrole konfiguracji projektu (Auth, sekrety, funkcje, kopie, SSL, migracje).
 // Klucz anon: SUPABASE_ANON_KEY, inaczej z bundla strony, inaczej z Management API. Kod wyjścia 1 przy każdym FAIL.
-// --ai: oczekiwany INSTANCE_AI wdrożenia (domyślnie INSTANCE_AI ze środowiska; brak = WARN i pominięcie bramki AI).
+// --ai / --mcp: oczekiwane INSTANCE_AI / INSTANCE_MCP wdrożenia (domyślnie ze środowiska; brak = WARN i pominięcie bramki).
 // INSTANCE_EMAIL nie jest sprawdzany z zewnątrz (stan widać w panelu: Integracje → Powiadomienia).
 // Uruchamiaj po każdym wdrożeniu i po provisioningu (scripts/instances/provision.mjs).
 import fs from 'node:fs';
@@ -30,19 +30,24 @@ import {
 const args = process.argv.slice(2);
 const positional = args.filter((a) => !a.startsWith('--'));
 if (args.includes('--help') || positional.length !== 2) {
-  console.log('Użycie: [SUPABASE_ACCESS_TOKEN=...] [INSTANCE_AI=on|off] node scripts/instances/doctor.mjs <domena> <ref> [--ai=on|off]');
+  console.log(
+    'Użycie: [SUPABASE_ACCESS_TOKEN=...] [INSTANCE_AI=on|off] [INSTANCE_MCP=on|off] node scripts/instances/doctor.mjs <domena> <ref> [--ai=on|off] [--mcp=on|off]',
+  );
   process.exit(args.includes('--help') ? 0 : 2);
 }
-const aiArg = args.find((a) => a.startsWith('--ai='))?.slice('--ai='.length) ?? process.env.INSTANCE_AI;
-let aiExpected = null; // null = nie podano, bramka AI niesprawdzana
-if (aiArg !== undefined) {
-  const value = aiArg.trim().toLowerCase();
+/** Oczekiwany stan flagi z `--<opcja>=on|off` albo zmiennej środowiska; null = nie podano (bramka niesprawdzana). */
+function expectedFlag(option, variable) {
+  const raw = args.find((a) => a.startsWith(`--${option}=`))?.slice(option.length + 3) ?? process.env[variable];
+  if (raw === undefined) return null;
+  const value = raw.trim().toLowerCase();
   if (value !== 'on' && value !== 'off') {
-    console.error(`--ai / INSTANCE_AI: oczekiwano "on" albo "off", jest ${JSON.stringify(aiArg)}`);
+    console.error(`--${option} / ${variable}: oczekiwano "on" albo "off", jest ${JSON.stringify(raw)}`);
     process.exit(2);
   }
-  aiExpected = value === 'on';
+  return value === 'on';
 }
+const aiExpected = expectedFlag('ai', 'INSTANCE_AI');
+const mcpExpected = expectedFlag('mcp', 'INSTANCE_MCP');
 const domain = parseDomain(positional[0]);
 const ref = parseRef(positional[1]);
 const origin = `https://${domain}`;
@@ -150,36 +155,45 @@ else {
 anonKey ??= bundleAnon;
 
 // ---------------------------------------------------------------------------------------------
-// Vercel: bramka AI (MCP, OAuth, PoliAI), OAuth discovery, cron bez sekretu, region funkcji
+// Vercel: bramki AI (PoliAI) i MCP (MCP, OAuth), OAuth discovery, cron bez sekretu, region funkcji
 // ---------------------------------------------------------------------------------------------
-// Same GET: przy INSTANCE_AI=off każdy z handlerów odpowiada 404 AI_DISABLED przed autoryzacją.
-const AI_PATHS = [
-  '/api/mcp',
-  '/api/poliai',
-  '/.well-known/oauth-authorization-server',
-  '/api/oauth/authorize',
-  '/api/oauth/token',
-  '/api/oauth/code',
+// Same GET: przy wyłączonej fladze każdy z handlerów odpowiada 404 z kodem bramki przed autoryzacją.
+const GATES = [
+  { area: 'AI', variable: 'INSTANCE_AI', option: 'ai', code: 'AI_DISABLED', expected: aiExpected, paths: ['/api/poliai'] },
+  {
+    area: 'MCP',
+    variable: 'INSTANCE_MCP',
+    option: 'mcp',
+    code: 'MCP_DISABLED',
+    expected: mcpExpected,
+    paths: ['/api/mcp', '/.well-known/oauth-authorization-server', '/api/oauth/authorize', '/api/oauth/token', '/api/oauth/code'],
+  },
 ];
-const aiProbes = await Promise.all(AI_PATHS.map(async (p) => ({ path: p, ...(await getJson(`${origin}${p}`)) })));
-const aiDisabled = (probe) => probe.status === 404 && probe.body?.code === 'AI_DISABLED';
-if (aiExpected === null) {
-  report('WARN', 'AI', 'brak --ai=on|off i INSTANCE_AI - pominięto kontrolę bramki AI');
-} else {
-  const wrong = aiProbes.filter((probe) => (aiExpected ? probe.status === 404 : !aiDisabled(probe)));
-  const describe = (probe) => `${probe.path} → ${probe.status}${probe.body?.code ? ` ${probe.body.code}` : ''}`;
+const describeProbe = (probe) => `${probe.path} → ${probe.status}${probe.body?.code ? ` ${probe.body.code}` : ''}`;
+const gateProbes = {};
+for (const gate of GATES) {
+  const probes = await Promise.all(gate.paths.map(async (p) => ({ path: p, ...(await getJson(`${origin}${p}`)) })));
+  gateProbes[gate.area] = probes;
+  if (gate.expected === null) {
+    report('WARN', gate.area, `brak --${gate.option}=on|off i ${gate.variable} - pominięto kontrolę bramki ${gate.area}`);
+    continue;
+  }
+  const disabled = (probe) => probe.status === 404 && probe.body?.code === gate.code;
+  const wrong = probes.filter((probe) => (gate.expected ? probe.status === 404 : !disabled(probe)));
   check(
     wrong.length === 0,
-    'AI',
-    aiExpected ? `AI włączone: ${aiProbes.map(describe).join(', ')}` : `AI wyłączone: ${AI_PATHS.length} tras → 404 AI_DISABLED`,
-    aiExpected
-      ? `oczekiwano AI włączonego, a ${wrong.map(describe).join(', ')} (INSTANCE_AI=on w Vercelu i ponowne wdrożenie)`
-      : `oczekiwano 404 AI_DISABLED, a ${wrong.map(describe).join(', ')} (INSTANCE_AI=off w Vercelu i ponowne wdrożenie)`,
+    gate.area,
+    gate.expected
+      ? `${gate.area} włączone: ${probes.map(describeProbe).join(', ')}`
+      : `${gate.area} wyłączone: ${gate.paths.length} tras → 404 ${gate.code}`,
+    gate.expected
+      ? `oczekiwano ${gate.area} włączonego, a ${wrong.map(describeProbe).join(', ')} (${gate.variable}=on w Vercelu i ponowne wdrożenie)`
+      : `oczekiwano 404 ${gate.code}, a ${wrong.map(describeProbe).join(', ')} (${gate.variable}=off w Vercelu i ponowne wdrożenie)`,
   );
 }
-const discovery = aiProbes.find((probe) => probe.path === '/.well-known/oauth-authorization-server');
-if (aiDisabled(discovery)) {
-  report('SKIP', 'OAuth', 'AI wyłączone - OAuth dla Claude nieaktywny, issuer niesprawdzany');
+const discovery = gateProbes.MCP.find((probe) => probe.path === '/.well-known/oauth-authorization-server');
+if (discovery.status === 404 && discovery.body?.code === 'MCP_DISABLED') {
+  report('SKIP', 'OAuth', 'MCP wyłączone - OAuth dla Claude nieaktywny, issuer niesprawdzany');
 } else {
   check(
     discovery.body?.issuer === origin,

@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { BrandEmblem } from '@/components/common/BrandEmblem';
 import { ProductCredit } from '@/components/common/ProductCredit';
-import { useSiteContent } from '@/hooks/useSiteContent';
+import { usePublicSite } from '@/hooks/usePublicSite';
 
 /** Dekoracyjne, rozmyte plamy w kolorach marki (tylko tokeny, niska nieprzezroczystość). */
 export function AuthBackdrop({ className }: { className?: string }) {
@@ -43,9 +43,12 @@ export function BrandMark({ subtitle }: { subtitle: string | null }) {
   );
 }
 
-/** Znak marki z podpisem z treści instancji: nazwisko posła, bez nazwiska - tytuł ("Poseł na Sejm RP"). */
+/**
+ * Znak marki z podpisem z treści instancji: nazwisko posła, bez nazwiska - tytuł ("Poseł na Sejm RP").
+ * Ekrany logowania działają bez sesji, więc dane z GET /api/public-site (anon nie czyta bazy).
+ */
 function SiteBrandMark() {
-  const { data: site, isPending } = useSiteContent();
+  const { data: site, isPending } = usePublicSite();
   const subtitle = isPending ? null : site ? site.identity.mp_name || site.identity.mp_title : '';
   return <BrandMark subtitle={subtitle} />;
 }

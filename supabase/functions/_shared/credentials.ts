@@ -15,6 +15,7 @@
 // 5. mail z linkiem odzyskania.
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { errorSummary } from './log-safe.ts';
 
 /**
  * Losowe haslo (256 bitow). Prefiks spelnia password_requirements
@@ -49,7 +50,7 @@ async function scramblePassword(
     password: randomPassword(),
   });
   if (passwordError) {
-    console.error('scramble password error', passwordError);
+    console.error('scramble password error', errorSummary(passwordError));
     return { passwordScrambled: false, passwordSetupRequired: false };
   }
 
@@ -57,7 +58,7 @@ async function scramblePassword(
     .from('profiles')
     .update({ password_set: false })
     .eq('id', userId);
-  if (flagError) console.error('password_set reset error', flagError);
+  if (flagError) console.error('password_set reset error', errorSummary(flagError));
 
   return { passwordScrambled: true, passwordSetupRequired: !flagError };
 }
@@ -78,7 +79,7 @@ async function sendRecoveryEmail(
   });
   const { error } = await publicClient.auth.resetPasswordForEmail(email, { redirectTo });
   if (error) {
-    console.error('resetPasswordForEmail error', error);
+    console.error('resetPasswordForEmail error', errorSummary(error));
     return false;
   }
   return true;
@@ -98,7 +99,7 @@ async function revokeAccess(
     p_ban: false,
   });
   if (error) {
-    console.error('revoke_user_access error', reason, error);
+    console.error('revoke_user_access error', reason, errorSummary(error));
     return null;
   }
   return data && typeof data === 'object' ? (data as RevokeCounters) : {};
@@ -176,7 +177,7 @@ export async function lockOutAccount(
     userId,
   });
   if (listError) {
-    console.error('listFactors error', listError);
+    console.error('listFactors error', errorSummary(listError));
     return { failedStep: 'mfa_list', state };
   }
   const factors = factorsData?.factors ?? [];
@@ -187,7 +188,7 @@ export async function lockOutAccount(
       id: factor.id,
     });
     if (deleteError) {
-      console.error('deleteFactor error', factor.id, deleteError);
+      console.error('deleteFactor error', factor.id, errorSummary(deleteError));
       continue;
     }
     state.mfa_deleted_count++;

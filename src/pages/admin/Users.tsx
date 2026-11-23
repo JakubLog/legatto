@@ -26,6 +26,12 @@ import { EditUserProfileDialog } from '@/components/admin/EditUserProfileDialog'
 import { ResetMfaDialog } from '@/components/admin/ResetMfaDialog';
 import { RevokeSessionsDialog } from '@/components/admin/RevokeSessionsDialog';
 import { AccountDetailsDialog } from '@/components/admin/AccountDetailsDialog';
+import { AdminSurfaceNotice } from '@/components/admin/AdminSurfaceNotice';
+import { isAdminSurfaceRequired } from '@/lib/adminSurface';
+
+// CRM na VPS: tworzenie/usuwanie kont, reset 2FA, wylogowanie i linki logowania tylko w panelu
+// administracyjnym (proxy odrzuca admin-* poza nim). Stała runtime - nie zmienia się w trakcie sesji.
+const SENSITIVE_ACTIONS = !isAdminSurfaceRequired();
 
 export default function AdminUsers() {
   const { profile: me } = useAuth();
@@ -100,8 +106,10 @@ export default function AdminUsers() {
         icon={UsersIcon}
         title="Zespół biura"
         description={isLoading ? 'Wczytywanie...' : `${users?.length ?? 0} ${plural(users?.length ?? 0, 'osoba', 'osoby', 'osób')}`}
-        actions={<CreateUserDialog offices={offices} canManagePosel={canManagePosel} />}
+        actions={SENSITIVE_ACTIONS ? <CreateUserDialog offices={offices} canManagePosel={canManagePosel} /> : undefined}
       />
+
+      {!SENSITIVE_ACTIONS && <AdminSurfaceNotice feature="Dodawanie i usuwanie kont, reset 2FA, wylogowanie, linki logowania" />}
 
       {usersError && (
         <ErrorNotice
@@ -120,6 +128,7 @@ export default function AdminUsers() {
             isMe={me?.id === u.id}
             isLinkPending={pendingLinkUserId === u.id}
             canManagePosel={canManagePosel}
+            sensitiveActions={SENSITIVE_ACTIONS}
             onEdit={setEditProfileUser}
             onSendLink={handleSendAuthLink}
             onDetails={setAccountDetailsUser}

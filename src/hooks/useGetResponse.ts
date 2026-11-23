@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { SECRET_SETTINGS_STATUS_KEY, saveSecretSetting } from '@/hooks/useSecretSettings';
+import { INSTANCE } from '@/lib/instance';
 
 // ============================================================================
 // Settings (app_settings) - Posel only via RLS
@@ -117,6 +118,10 @@ async function callProxy<TResponse = unknown>(
   action: ProxyAction,
   payload?: Record<string, unknown>,
 ): Promise<TResponse> {
+  // INSTANCE_GETRESPONSE=off: funkcja zwraca 404 - bez zbędnego wywołania i z czytelnym komunikatem.
+  if (!INSTANCE.getresponse) {
+    throw Object.assign(new Error('Integracja GetResponse jest wyłączona na tej instancji.'), { code: 'GETRESPONSE_DISABLED' });
+  }
   const { data, error } = await supabase.functions.invoke<TResponse>('getresponse-proxy', {
     body: { action, payload },
   });

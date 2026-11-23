@@ -1,0 +1,21 @@
+title = "legatto-app"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "sha256 migracji sprzed reguły compat-n-1 (scripts/lint-migrations.mjs), nie sekrety"
+paths = ['''^supabase/migrations\.baseline\.json$''']
+
+[[allowlists]]
+description = "Wektory testowe koperty formularza (klucze wygenerowane tylko do testów, packages/public-submission)"
+paths = ['''^packages/public-submission/test/vectors\.json$''']
+
+[[allowlists]]
+description = "Atrapy sekretów w testach i lokalnych bazach testowych (kontenery bez portów, usuwane po teście)"
+paths = [
+  '''^api/_lib/log-safe\.test\.ts$''',
+  '''^supabase/functions/_shared/log-safe\.test\.ts$''',
+  '''^supabase/tests/run-features\.sh$''',
+  '''^scripts/ci/db-stack\.sh$''',
+]

@@ -16,7 +16,9 @@
 
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 import { corsHeadersFor } from '../_shared/cors.ts';
+import { adminSurfaceGuard } from '../_shared/surface.ts';
 import { isCallerAal2, isCallerPoselRole, POSEL_ONLY_MESSAGE, serviceAudit, UUID_RE } from '../_shared/auth.ts';
+import { errorSummary } from '../_shared/log-safe.ts';
 
 type Role = 'posel' | 'administrator' | 'pracownik' | 'asystent';
 
@@ -64,6 +66,9 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: cors });
   }
+  // Na VPS tylko z hosta admin (A5); na crm 404 jak blokada proxy.
+  const surfaceDenied = adminSurfaceGuard(req, cors);
+  if (surfaceDenied) return surfaceDenied;
 
   const json = (body: unknown, status: number) =>
     new Response(JSON.stringify(body), {
@@ -107,7 +112,7 @@ Deno.serve(async (req) => {
 
     const { data: isPoselData, error: roleError } = await callerClient.rpc('is_posel');
     if (roleError) {
-      console.error('is_posel rpc error', roleError);
+      console.error('is_posel rpc error', errorSummary(roleError));
       return json({ error: 'Nie udało się zweryfikować uprawnien' }, 500);
     }
     if (isPoselData !== true) {
@@ -181,7 +186,7 @@ Deno.serve(async (req) => {
         .eq('id', officeId)
         .maybeSingle();
       if (officeError) {
-        console.error('office lookup error', officeError);
+        console.error('office lookup error', errorSummary(officeError));
         return json({ error: 'Nie udało się zweryfikować biura' }, 500);
       }
       if (!office) {
@@ -203,7 +208,7 @@ Deno.serve(async (req) => {
       .limit(1)
       .maybeSingle();
     if (existingError) {
-      console.error('profile lookup error', existingError);
+      console.error('profile lookup error', errorSummary(existingError));
       return json({ error: 'Nie udało się zweryfikować adresu email' }, 500);
     }
     if (existingProfile) {
@@ -216,7 +221,7 @@ Deno.serve(async (req) => {
     // od nowa; potwierdzone konto bez profilu odrzucamy (decyzja wlasciciela w Dashboard).
     const { user: orphan, error: orphanLookupError } = await findAuthUserByEmail(adminClient, email);
     if (orphanLookupError) {
-      console.error('auth user lookup error', orphanLookupError);
+      console.error('auth user lookup error', errorSummary(orphanLookupError));
       return json({ error: 'Nie udało się zweryfikować adresu email' }, 500);
     }
     if (orphan) {
@@ -226,7 +231,7 @@ Deno.serve(async (req) => {
         .eq('id', orphan.id)
         .maybeSingle();
       if (orphanProfileError) {
-        console.error('orphan profile lookup error', orphanProfileError);
+        console.error('orphan profile lookup error', errorSummary(orphanProfileError));
         return json({ error: 'Nie udało się zweryfikować adresu email' }, 500);
       }
       if (orphanProfile) {
@@ -244,7 +249,7 @@ Deno.serve(async (req) => {
       }
       const { error: orphanDeleteError } = await adminClient.auth.admin.deleteUser(orphan.id);
       if (orphanDeleteError) {
-        console.error('orphan deleteUser error', orphanDeleteError);
+        console.error('orphan deleteUser error', errorSummary(orphanDeleteError));
         return json({ error: 'Nie udało się usunąć starego, niepotwierdzonego konta z tym adresem email' }, 500);
       }
       await serviceAudit(adminClient, callerUser.user.id, 'user.orphan_auth_deleted', 'profile', orphan.id, {
@@ -262,7 +267,7 @@ Deno.serve(async (req) => {
       user_metadata: { full_name: fullName },
     });
     if (createError || !created?.user) {
-      console.error('createUser error', createError);
+      console.error('createUser error', errorSummary(createError));
       const alreadyExists =
         createError?.status === 422 || /already|exists/i.test(createError?.message ?? '');
       return json(
@@ -279,7 +284,7 @@ Deno.serve(async (req) => {
     // Rollback: konto powstalo w tym wywolaniu i nie ma profilu - usuwamy je.
     const rollbackAuthUser = async () => {
       const { error: rollbackError } = await adminClient.auth.admin.deleteUser(newUserId);
-      if (rollbackError) console.error('rollback deleteUser error', rollbackError);
+      if (rollbackError) console.error('rollback deleteUser error', errorSummary(rollbackError));
     };
 
     // Zaproszenie: GoTrue wysyla mail dla istniejacego, niepotwierdzonego konta (naszego).
@@ -288,7 +293,7 @@ Deno.serve(async (req) => {
       redirectTo,
     });
     if (inviteError || invited?.user?.id !== newUserId) {
-      console.error('inviteUserByEmail error', inviteError, invited?.user?.id);
+      console.error('inviteUserByEmail error', errorSummary(inviteError), invited?.user?.id);
       await rollbackAuthUser();
       return json({ error: 'Nie udało się wysłać zaproszenia' }, 400);
     }
@@ -305,7 +310,7 @@ Deno.serve(async (req) => {
     });
 
     if (profileError) {
-      console.error('profile insert error', profileError);
+      console.error('profile insert error', errorSummary(profileError));
       await rollbackAuthUser();
       return profileError.code === '23505'
         ? json({ error: 'Użytkownik z tym adresem email już istnieje' }, 409)
@@ -322,7 +327,7 @@ Deno.serve(async (req) => {
 
     return json({ success: true, user_id: newUserId }, 200);
   } catch (err) {
-    console.error('admin-create-user error', err);
+    console.error('admin-create-user error', errorSummary(err));
     return json({ error: 'Wystąpił nieoczekiwany błąd. Skontaktuj się z administratorem.' }, 500);
   }
 });

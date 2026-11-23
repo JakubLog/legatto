@@ -1,4 +1,5 @@
 import { getServiceClient } from '../supabase.js';
+import { DbError, errorSummary } from '../log-safe.js';
 import { logAudit } from '../audit.js';
 import {
   type ToolDefinition,
@@ -115,7 +116,7 @@ export const budgetTools: ToolDefinition[] = [
       if (missingInvoiceFile !== null) q = q.eq('missing_invoice_file', missingInvoiceFile);
 
       const { data, error } = await q;
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       const rows = data ?? [];
       const total = rows.reduce((s, r) => s + (r.amount ?? 0), 0);
       return jsonResult({
@@ -144,7 +145,7 @@ export const budgetTools: ToolDefinition[] = [
       const id = requireString({ id: args.id }, 'id', 64);
       const supabase = getServiceClient();
       const { data, error } = await supabase.from('office_expenses').select('*').eq('id', id).maybeSingle();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       if (!data) return textResult(`Wydatek o id=${id} nie istnieje.`, true);
       return jsonResult(await withLabel(data, EXPENSE_LABELS));
     },
@@ -188,7 +189,7 @@ export const budgetTools: ToolDefinition[] = [
         notes: optionalString(args, 'notes', 2000),
         created_by: ctx.userId,
       }).select().single();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       await logAudit(ctx, 'mcp.expense_create', { entityType: 'expense', entityId: data.id, metadata: { amount, tool: 'budget_create' } });
       return jsonResult({ created: true, expense: await withLabel(data, EXPENSE_LABELS) });
     },
@@ -231,7 +232,7 @@ export const budgetTools: ToolDefinition[] = [
       if (Object.keys(update).length === 0) return textResult('Brak pol do zaktualizowania.', true);
       const supabase = getServiceClient();
       const { data, error } = await supabase.from('office_expenses').update(update).eq('id', id).select().single();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       await logAudit(ctx, 'mcp.expense_update', { entityType: 'expense', entityId: id, metadata: { fields: Object.keys(update), tool: 'budget_update' } });
       return jsonResult({ updated: true, expense: await withLabel(data, EXPENSE_LABELS) });
     },
@@ -253,7 +254,7 @@ export const budgetTools: ToolDefinition[] = [
       const id = requireString({ id: args.id }, 'id', 64);
       const supabase = getServiceClient();
       const { error } = await supabase.from('office_expenses').delete().eq('id', id);
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       await logAudit(ctx, 'mcp.expense_delete', { entityType: 'expense', entityId: id, metadata: { tool: 'budget_delete' } });
       return jsonResult({ deleted: true, id });
     },
@@ -287,12 +288,12 @@ export const budgetTools: ToolDefinition[] = [
       if (mime === null) throw new ToolValidationError(`Pole "mime" jest wymagane (${RECEIPT_MIMES.join(', ')}).`);
       const supabase = getServiceClient();
       const { data: expense, error: expenseError } = await supabase.from('office_expenses').select('id').eq('id', id).maybeSingle();
-      if (expenseError) throw new Error(expenseError.message);
+      if (expenseError) throw new DbError(expenseError);
       if (!expense) return textResult(`Wydatek o id=${id} nie istnieje.`, true);
 
       const path = `${ctx.userId}/${receiptFileName(fileName, mime)}`;
       const { data, error } = await supabase.storage.from(RECEIPT_BUCKET).createSignedUploadUrl(path);
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       return jsonResult({
         upload_url: data.signedUrl,
         method: 'PUT',
@@ -339,7 +340,7 @@ export const budgetTools: ToolDefinition[] = [
         .select('id, receipt_path')
         .eq('id', id)
         .maybeSingle();
-      if (expenseError) throw new Error(expenseError.message);
+      if (expenseError) throw new DbError(expenseError);
       if (!expense) return textResult(`Wydatek o id=${id} nie istnieje.`, true);
       const previous = expense.receipt_path;
       if (previous === path) return textResult('Ten plik jest już podpięty do tego wydatku - nic nie zmieniono.');
@@ -355,7 +356,7 @@ export const budgetTools: ToolDefinition[] = [
         .select('id', { count: 'exact', head: true })
         .eq('receipt_path', path)
         .neq('id', id);
-      if (usedError) throw new Error(usedError.message);
+      if (usedError) throw new DbError(usedError);
       if (usedBy) return textResult('Ten plik jest już załącznikiem innego wydatku - wgraj go ponownie przez budget_receipt_upload_url.', true);
 
       const { data: file, error: downloadError } = await supabase.storage.from(RECEIPT_BUCKET).download(path);
@@ -387,7 +388,7 @@ export const budgetTools: ToolDefinition[] = [
       if (error?.code === '23505') {
         return textResult('Ten plik został w międzyczasie podpięty do innego wydatku - wgraj go ponownie przez budget_receipt_upload_url.', true);
       }
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       if (!data) {
         return textResult('Plik wydatku zmienił się w międzyczasie - nic nie zapisano. Sprawdź budget_get i spróbuj ponownie (wgrany plik czeka do 7 dni pod tym samym path).', true);
       }
@@ -395,7 +396,7 @@ export const budgetTools: ToolDefinition[] = [
       // Indeks unikalny gwarantuje, ze zaden inny wydatek na niego nie wskazuje.
       if (previous) {
         const { error: removeError } = await supabase.storage.from(RECEIPT_BUCKET).remove([previous]);
-        if (removeError) console.error('[mcp] receipt remove error', removeError);
+        if (removeError) console.error('[mcp] receipt remove error', errorSummary(removeError));
       }
       await logAudit(ctx, 'mcp.expense_receipt_attach', {
         entityType: 'expense',

@@ -1,5 +1,6 @@
 import type { McpAuthContext, ToolChannel } from '../auth.js';
 import { logAudit } from '../audit.js';
+import { errorSummary } from '../log-safe.js';
 import { textResult, ToolValidationError, type ToolDefinition, type ToolResult } from './types.js';
 import { meTools } from './me.js';
 import { briefingTools } from './briefing.js';
@@ -112,7 +113,7 @@ export async function callTool(
     return await tool.handler(args, ctx);
   } catch (err) {
     if (err instanceof ToolValidationError) return textResult(`Blad walidacji: ${err.message}`, true);
-    console.error(`[${ctx.channel}] tool error ${tool.name}:`, err);
+    console.error(`[${ctx.channel}] tool error ${tool.name}:`, errorSummary(err));
     return textResult('Blad wykonania narzedzia (szczegoly w logach serwera).', true);
   }
 }

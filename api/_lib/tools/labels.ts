@@ -5,6 +5,7 @@
 // dictionaries.ts (*_list).
 
 import { getServiceClient } from '../supabase.js';
+import { DbError, errorSummary } from '../log-safe.js';
 
 type Dictionary = 'case_categories' | 'expense_categories' | 'powiaty' | 'gminy' | 'profiles';
 
@@ -69,7 +70,7 @@ export async function withLabels<T extends Row>(rows: T[], spec: LabelSpec): Pro
           .from(dict)
           .select(`id, ${column}`)
           .in('id', [...values]);
-        if (error) throw new Error(`${dict}: ${error.message}`);
+        if (error) throw new DbError(error, dict);
         for (const item of (data ?? []) as unknown as Row[]) {
           const name = item[column];
           if (typeof name === 'string') names.set(`${dict}:${String(item.id)}`, name);
@@ -77,7 +78,7 @@ export async function withLabels<T extends Row>(rows: T[], spec: LabelSpec): Pro
       }),
     );
   } catch (err) {
-    console.warn('[tools] labels failed', err instanceof Error ? err.message : err);
+    console.warn('[tools] labels failed', errorSummary(err));
     return rows;
   }
 

@@ -33,6 +33,8 @@ const AdminUsers = lazy(() => import('@/pages/admin/Users'));
 const AdminOffices = lazy(() => import('@/pages/admin/Offices'));
 const AdminObowiazki = lazy(() => import('@/pages/admin/Obowiazki'));
 const AdminStronaGlowna = lazy(() => import('@/pages/admin/StronaGlowna'));
+const AdminBlog = lazy(() => import('@/pages/admin/Blog'));
+const AdminDataExport = lazy(() => import('@/pages/admin/DataExport'));
 const PulsBiura = lazy(() => import('@/pages/PulsBiura'));
 const AdminAuditLog = lazy(() => import('@/pages/admin/AuditLog'));
 const AdminIntegracje = lazy(() => import('@/pages/admin/Integracje'));
@@ -87,8 +89,8 @@ export default function App() {
               <Route path="/login" element={<Login />} />
 
               {/* OAuth consent — auth obsługiwana wewnątrz komponentu; tryb prywatny zasłania też zgodę.
-                  Tylko z włączonym AI (INSTANCE_AI=on): OAuth służy wyłącznie klientom MCP. */}
-              {INSTANCE.ai && (
+                  Tylko z włączonym MCP (INSTANCE_MCP=on): OAuth służy wyłącznie klientom MCP. */}
+              {INSTANCE.mcp && (
                 <Route path="/oauth/consent" element={<PrivacyGate><OAuthConsent /></PrivacyGate>} />
               )}
 
@@ -111,8 +113,8 @@ export default function App() {
                   {/* Integracje: każda rola; kafelki według roli. */}
                   <Route path="admin/integracje" element={<AdminIntegracjeIndex />} />
 
-                  {/* Konfiguracja MCP: Poseł/Administrator + Pracownik (nie Asystent); tylko z włączonym AI */}
-                  {INSTANCE.ai && (
+                  {/* Konfiguracja MCP: Poseł/Administrator + Pracownik (nie Asystent); tylko z włączonym MCP */}
+                  {INSTANCE.mcp && (
                     <Route element={<RoleGuard allow={['posel', 'administrator', 'pracownik']} />}>
                       <Route element={<DesktopOnlyRoute />}>
                         <Route path="admin/integracje/mcp" element={<AdminIntegracje />} />
@@ -126,15 +128,19 @@ export default function App() {
                     <Route path="admin/użytkownicy" element={<AdminUsers />} />
                     <Route path="admin/biura" element={<AdminOffices />} />
                     <Route path="admin/strona-główna" element={<AdminStronaGlowna />} />
+                    <Route path="admin/blog" element={<AdminBlog />} />
                     {/* Konfiguracja i dzienniki - na telefonie tylko informacja "dostępne na komputerze" */}
                     <Route element={<DesktopOnlyRoute />}>
                       <Route path="admin/obowiązki" element={<AdminObowiazki />} />
                       <Route path="admin/audit" element={<AdminAuditLog />} />
-                      <Route
-                        path="admin/integracje/getresponse"
-                        element={<AdminIntegracjeGetResponse />}
-                      />
-                      <Route path="admin/integracje/ics" element={<AdminIntegracjeIcs />} />
+                      <Route path="admin/eksport-danych" element={<AdminDataExport />} />
+                      {INSTANCE.getresponse && (
+                        <Route
+                          path="admin/integracje/getresponse"
+                          element={<AdminIntegracjeGetResponse />}
+                        />
+                      )}
+                      {INSTANCE.ics && <Route path="admin/integracje/ics" element={<AdminIntegracjeIcs />} />}
                       {INSTANCE.ai && <Route path="admin/integracje/ai" element={<AdminIntegracjeAi />} />}
                       <Route path="admin/integracje/powiadomienia" element={<AdminIntegracjePowiadomienia />} />
                     </Route>

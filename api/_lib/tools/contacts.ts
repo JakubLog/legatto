@@ -1,4 +1,5 @@
 import { getServiceClient } from '../supabase.js';
+import { DbError } from '../log-safe.js';
 import { logAudit } from '../audit.js';
 import { applyDataScope } from '../access.js';
 import {
@@ -54,7 +55,7 @@ export const contactsTools: ToolDefinition[] = [
       if (powiatId !== null) q = q.eq('powiat_id', powiatId);
       if (gminaId !== null) q = q.eq('gmina_id', gminaId);
       const { data, error } = await q;
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       return jsonResult({ count: data?.length ?? 0, offset, contacts: await withLabels(data ?? [], CONTACT_LABELS) });
     },
   },
@@ -78,7 +79,7 @@ export const contactsTools: ToolDefinition[] = [
         ctx,
         'contacts',
       ).maybeSingle();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       if (!data) return textResult(`Kontakt o id=${id} nie istnieje lub jest poza Twoim zakresem danych.`, true);
       return jsonResult(await withLabel(data, CONTACT_LABELS));
     },
@@ -122,7 +123,7 @@ export const contactsTools: ToolDefinition[] = [
       );
       if (type) q = q.eq('type', type);
       const { data, error } = await q;
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       return jsonResult({ query, count: data?.length ?? 0, contacts: await withLabels(data ?? [], CONTACT_LABELS) });
     },
   },
@@ -168,7 +169,7 @@ export const contactsTools: ToolDefinition[] = [
         created_by: ctx.userId,
       };
       const { data, error } = await supabase.from('contacts').insert(insert).select().single();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       await logAudit(ctx, 'mcp.contact_create', { entityType: 'contact', entityId: data.id, metadata: { tool: 'contacts_create' } });
       return jsonResult({ created: true, contact: await withLabel(data, CONTACT_LABELS) });
     },
@@ -218,7 +219,7 @@ export const contactsTools: ToolDefinition[] = [
       )
         .select()
         .maybeSingle();
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       if (!data) return textResult(`Kontakt o id=${id} nie istnieje lub jest poza Twoim zakresem danych.`, true);
       await logAudit(ctx, 'mcp.contact_update', { entityType: 'contact', entityId: id, metadata: { fields: Object.keys(update), tool: 'contacts_update' } });
       return jsonResult({ updated: true, contact: await withLabel(data, CONTACT_LABELS) });
@@ -241,7 +242,7 @@ export const contactsTools: ToolDefinition[] = [
       const id = requireString({ id: args.id }, 'id', 64);
       const supabase = getServiceClient();
       const { error } = await supabase.from('contacts').delete().eq('id', id);
-      if (error) throw new Error(error.message);
+      if (error) throw new DbError(error);
       await logAudit(ctx, 'mcp.contact_delete', { entityType: 'contact', entityId: id, metadata: { tool: 'contacts_delete' } });
       return jsonResult({ deleted: true, id });
     },

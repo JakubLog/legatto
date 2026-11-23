@@ -3,6 +3,12 @@
 // w tabeli `cases` z source='public_form'. Zgłoszenie pojawia się w liście spraw
 // w portalu biura razem z wewnętrznymi (filtr "źródło: publiczne" dostępny w UI).
 //
+// Tryb Vercel / Supabase Cloud do cutoveru instancji na VPS. Na VPS formularz strony posła
+// idzie przez Worker → Cloudflare Queues → legatto-intake (packages/public-submission,
+// server/intake, intake.submit_public_case), a proxy blokuje tę funkcję na crm. Usunąć
+// razem z sekretami TURNSTILE_SECRET i PUBLIC_SUBMISSION_IP_SALT po przeniesieniu ostatniej
+// instancji (docs/selfhost-features.md, „Cutover”).
+//
 // Anti-spam:
 // - honeypot (`website`),
 // - Cloudflare Turnstile weryfikowany po stronie serwera (siteverify, sekret
@@ -33,6 +39,7 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { corsHeadersFor, INSTANCE_ORIGINS, IS_LOCAL_DEV } from '../_shared/cors.ts';
+import { errorSummary } from '../_shared/log-safe.ts';
 
 interface SubmitBody {
   reporter_name?: unknown;
@@ -183,7 +190,7 @@ Deno.serve(async (req) => {
       .select('id')
       .eq('id', data.powiat_id)
       .maybeSingle();
-    if (powiatErr) console.error('Powiat lookup failed', powiatErr);
+    if (powiatErr) console.error('Powiat lookup failed', errorSummary(powiatErr));
     if (powiatErr || !powiat) {
       return json({ error: 'Wybrany powiat nie istnieje' }, 400, cors);
     }
@@ -195,7 +202,7 @@ Deno.serve(async (req) => {
         .select('id, powiat_id')
         .eq('id', data.gmina_id)
         .maybeSingle();
-      if (gminaErr) console.error('Gmina lookup failed', gminaErr);
+      if (gminaErr) console.error('Gmina lookup failed', errorSummary(gminaErr));
       if (gminaErr || !gmina) {
         return json({ error: 'Wybrana gmina nie istnieje' }, 400, cors);
       }
@@ -210,7 +217,7 @@ Deno.serve(async (req) => {
       .select('id, is_system')
       .eq('id', data.category_id)
       .maybeSingle();
-    if (catErr) console.error('Category lookup failed', catErr);
+    if (catErr) console.error('Category lookup failed', errorSummary(catErr));
     if (catErr || !category) {
       return json({ error: 'Wybrana kategoria nie istnieje' }, 400, cors);
     }
@@ -242,13 +249,14 @@ Deno.serve(async (req) => {
       .single();
 
     if (insertError || !inserted) {
-      console.error('Insert failed', insertError);
+      // details/hint błędu INSERT cytują wartości wiersza (nazwisko, e-mail, telefon zgłaszającego).
+      console.error('Insert failed', errorSummary(insertError));
       return json({ error: 'Nie udało się zapisać zgłoszenia' }, 500, cors);
     }
 
     return json({ success: true, case_id: inserted.id }, 200, cors);
   } catch (err) {
-    console.error('public-submit-case error', err);
+    console.error('public-submit-case error', errorSummary(err));
     return json({ error: 'Nieznany błąd serwera' }, 500, cors);
   }
 });
@@ -366,7 +374,7 @@ async function verifyTurnstile(secret: string, token: string, remoteIp: string |
     }
     return true;
   } catch (err) {
-    console.error('Turnstile siteverify failed', err);
+    console.error('Turnstile siteverify failed', errorSummary(err));
     return false;
   }
 }
@@ -383,7 +391,7 @@ async function claimSlot(
     p_window_seconds: RATE_LIMIT_WINDOW_SECONDS,
   });
   if (error) {
-    console.error('Rate-limit claim failed', key === GLOBAL_RATE_LIMIT_KEY ? 'global' : 'ip', error);
+    console.error('Rate-limit claim failed', key === GLOBAL_RATE_LIMIT_KEY ? 'global' : 'ip', errorSummary(error));
     return 'error';
   }
   return data === true ? 'granted' : 'denied';

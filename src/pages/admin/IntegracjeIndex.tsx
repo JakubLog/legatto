@@ -31,17 +31,18 @@ import { INSTANCE } from '@/lib/instance';
 import { cn } from '@/lib/utils';
 import { plural } from '@/components/public/publicFormat';
 
-/** Integracje dla każdej roli: MCP dla piszących (tylko z włączonym AI), reszta tylko dla admina. */
+/** Integracje dla każdej roli: MCP dla piszących (tylko z włączonym MCP), reszta tylko dla admina. */
 export default function IntegracjeIndex() {
   const { profile } = useAuth();
   const role = profile?.role;
-  const showMcp = INSTANCE.ai && canWrite(role);
+  const showMcp = INSTANCE.mcp && canWrite(role);
   const admin = isAdmin(role);
   const empty = !showMcp && !admin;
   // Kafelki konfiguracji tylko na komputer (trasy w DesktopOnlyRoute) - lista do informacji na telefonie.
   const desktopOnlyNames = [
     ...(showMcp ? ['Claude MCP'] : []),
-    ...(admin ? ['GetResponse', 'kalendarze ICS'] : []),
+    ...(admin && INSTANCE.getresponse ? ['GetResponse'] : []),
+    ...(admin && INSTANCE.ics ? ['kalendarze ICS'] : []),
     ...(admin && INSTANCE.ai ? ['AI'] : []),
     ...(admin ? ['powiadomienia'] : []),
   ];
@@ -64,8 +65,8 @@ export default function IntegracjeIndex() {
             {showMcp && <McpTile />}
             {admin && (
               <>
-                <GetResponseTile />
-                <IcsTile />
+                {INSTANCE.getresponse && <GetResponseTile />}
+                {INSTANCE.ics && <IcsTile />}
                 {INSTANCE.ai && <AiTile />}
                 <NotificationsTile />
               </>
@@ -246,8 +247,10 @@ function NotificationsTile() {
   const adminQ = useNotificationsAdminStatus();
   const data = adminQ.data;
 
-  // E-mail liczy się tylko, gdy operator włączył go na instancji (INSTANCE_EMAIL=on).
+  // E-mail i push liczą się tylko, gdy operator / admin biura włączył je na instancji (INSTANCE_EMAIL, INSTANCE_PUSH).
   const emailOn = INSTANCE.email && data?.settings.email_enabled === true;
+  const pushOn = INSTANCE.push && data?.settings.push_enabled === true;
+  const channels = [INSTANCE.email ? 'e-mail (Resend)' : null, INSTANCE.push ? 'push w aplikacji' : null].filter(Boolean);
   let status: ReactNode;
   if (adminQ.isLoading) {
     status = (
@@ -255,7 +258,7 @@ function NotificationsTile() {
     );
   } else if (!data) {
     status = <StatusPill tone="neutral">Brak danych</StatusPill>;
-  } else if (!emailOn && !data.settings.push_enabled) {
+  } else if (!emailOn && !pushOn) {
     status = <StatusPill tone="neutral">Wyłączone</StatusPill>;
   } else if (emailOn && !data.key.configured) {
     status = <StatusPill tone="warning">Brak klucza</StatusPill>;
@@ -274,12 +277,8 @@ function NotificationsTile() {
       icon={Bell}
       iconClassName="bg-amber-500/10 text-amber-600 dark:text-amber-400"
       name="Powiadomienia"
-      tagline={INSTANCE.email ? 'E-mail (Resend), push' : 'Push'}
-      description={
-        INSTANCE.email
-          ? 'Powiadomienia o sprawach, wydarzeniach i bezpieczeństwie kont: e-mail przez Resend i push w aplikacji.'
-          : 'Powiadomienia o sprawach, wydarzeniach i bezpieczeństwie kont jako push w aplikacji.'
-      }
+      tagline={channels.length > 0 ? channels.join(', ').replace(/^./, (c) => c.toUpperCase()) : 'W aplikacji'}
+      description={`Powiadomienia o sprawach, wydarzeniach i bezpieczeństwie kont${channels.length > 0 ? `: ${channels.join(' i ')}` : ' w skrzynce aplikacji'}.`}
       status={status}
       desktopOnly
     />

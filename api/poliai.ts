@@ -82,6 +82,7 @@ import {
 import { authenticate, enforceDailyLimit, HttpError, requireAiSettings, type AiSettings } from './_lib/poliai/session.js';
 import { bindAttachments, claimAttachments, prepareAttachment, resolveAttachments } from './_lib/poliai/attachments.js';
 import { generateBudgetReport } from './_lib/poliai/budget-report.js';
+import { errorSummary } from './_lib/log-safe.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
 // Przygotowanie zalacznika: tekst stron (maks. 150 000 znakow) - obrazy ida prosto do bucketu.
@@ -191,7 +192,7 @@ async function runIntro(settings: AiSettings, messages: ApiMessage[], signal: Ab
       },
     );
   } catch (err) {
-    if (!signal.aborted) console.warn('[poliai] intro failed', err instanceof Error ? err.message : err);
+    if (!signal.aborted) console.warn('[poliai] intro failed', errorSummary(err));
   } finally {
     // Klient wstrzymuje kafelek pracy i odpowiedz do konca wstepu (kaskada) - takze po bledzie.
     send({ type: 'intro_done' });
@@ -214,7 +215,7 @@ async function afterTurn(
 ): Promise<void> {
   const fast = { apiKey: settings.apiKey, model: settings.fastModel, signal };
   const warn = (what: string) => (err: unknown) => {
-    if (!signal.aborted) console.warn(`[poliai] ${what} failed`, err instanceof Error ? err.message : err);
+    if (!signal.aborted) console.warn(`[poliai] ${what} failed`, errorSummary(err));
   };
 
   const suggestions = suggestActions({
@@ -254,7 +255,7 @@ async function afterTurn(
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   return handlerInner(req, res).catch((err) => {
-    console.error('[poliai] unhandled crash', err);
+    console.error('[poliai] unhandled crash', errorSummary(err));
     if (res.headersSent) {
       try {
         res.end();
@@ -316,7 +317,7 @@ async function handleConnection(req: VercelRequest, res: VercelResponse) {
     const models = await listModels(settings.apiKey, AbortSignal.timeout(CONNECTION_TIMEOUT_MS)).catch((err: unknown) => {
       if (err instanceof AnthropicApiError) throw err;
       // Timeout albo blad sieci - jak niedostepna usluga.
-      console.warn('[poliai] connection check failed', err instanceof Error ? err.message : err);
+      console.warn('[poliai] connection check failed', errorSummary(err));
       throw describeAnthropicError(503, '');
     });
     return res.status(200).json({
@@ -511,14 +512,14 @@ async function handlerInner(req: VercelRequest, res: VercelResponse) {
       if (err instanceof AnthropicApiError) {
         send({ type: 'error', error: err.message, code: err.code });
       } else {
-        console.error('[poliai] stream error', err);
+        console.error('[poliai] stream error', errorSummary(err));
         send({ type: 'error', error: 'Wystąpił nieoczekiwany błąd PoliAI. Spróbuj ponownie.' });
       }
     }
   } finally {
     // Wstep zwykle konczy sie po ~1 s; czekamy na niego, zeby nie pisac do zamknietej odpowiedzi.
     await intro;
-    await saveConversation(ctx, conversation).catch((err) => console.error('[poliai] save failed', err));
+    await saveConversation(ctx, conversation).catch((err) => console.error('[poliai] save failed', errorSummary(err)));
     finished = true;
     res.end();
   }

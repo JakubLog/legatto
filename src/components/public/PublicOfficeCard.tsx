@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { ChevronRight, Phone } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { usePublicOfficeStaff } from '@/hooks/useOffices';
-import { useRoleLabel } from '@/hooks/useMpForms';
+import { mpForms } from '@/lib/mpForms';
+import { roleLabel } from '@/lib/permissions';
+import type { SiteIdentity } from '@/lib/siteContent';
+import type { SiteOffice, SiteStaffMember } from '@/lib/siteSnapshot';
 import { cn } from '@/lib/utils';
-import type { Office, PublicStaffMember } from '@/integrations/supabase/types';
 import { OfficeContactList } from '@/components/public/OfficeContactList';
 import { telHref } from '@/components/public/officeLinks';
-import { publicCard, publicFocus, publicSkeleton, publicTag } from '@/components/public/styles';
+import { publicCard, publicFocus, publicTag } from '@/components/public/styles';
 
 /** Ile awatarów pokazać na kafelku; resztę zastępuje licznik "+N". */
 const AVATAR_STACK_MAX = 4;
@@ -22,7 +23,7 @@ function initials(name: string): string {
     .join('');
 }
 
-function StaffAvatar({ person, className }: { person: PublicStaffMember; className?: string }) {
+function StaffAvatar({ person, className }: { person: SiteStaffMember; className?: string }) {
   return (
     <Avatar className={cn('bg-cream-2', className)}>
       {person.avatar_url && <AvatarImage src={person.avatar_url} alt="" className="object-cover" />}
@@ -31,8 +32,8 @@ function StaffAvatar({ person, className }: { person: PublicStaffMember; classNa
   );
 }
 
-function StaffList({ staff }: { staff: PublicStaffMember[] }) {
-  const roleLabel = useRoleLabel();
+function StaffList({ staff, mpGender }: { staff: SiteStaffMember[]; mpGender: SiteIdentity['mp_gender'] }) {
+  const forms = mpForms(mpGender);
   return (
     <ul className="divide-y divide-border">
       {staff.map((person) => (
@@ -40,7 +41,7 @@ function StaffList({ staff }: { staff: PublicStaffMember[] }) {
           <StaffAvatar person={person} className="h-12 w-12 text-sm" />
           <div className="min-w-0 flex-1">
             <p className="font-semibold leading-snug">{person.full_name}</p>
-            <p className="text-sm text-muted-foreground">{roleLabel(person.role)}</p>
+            <p className="text-sm text-muted-foreground">{roleLabel(person.role, forms)}</p>
             {person.phone && (
               <a
                 href={telHref(person.phone)}
@@ -60,14 +61,17 @@ function StaffList({ staff }: { staff: PublicStaffMember[] }) {
   );
 }
 
-interface Props {
-  office: Office;
+export interface PublicOfficeCardProps {
+  office: SiteOffice;
+  /** Pracownicy biura widoczni publicznie (z migawki strony). */
+  staff: SiteStaffMember[];
+  /** Forma tytułu posła w etykiecie roli (Poseł/Posłanka). */
+  mpGender: SiteIdentity['mp_gender'];
 }
 
 /** Kafelek biura: jednakowy dla wszystkich biur, biuro główne wyróżnione wyłącznie etykietą. */
-export function PublicOfficeCard({ office }: Props) {
+export function PublicOfficeCard({ office, staff, mpGender }: PublicOfficeCardProps) {
   const [staffOpen, setStaffOpen] = useState(false);
-  const { data: staff = [], isLoading } = usePublicOfficeStaff(office.id);
   const shown = staff.slice(0, AVATAR_STACK_MAX);
   const hidden = staff.length - shown.length;
 
@@ -81,13 +85,7 @@ export function PublicOfficeCard({ office }: Props) {
         <OfficeContactList office={office} className="mt-2" />
       </div>
 
-      {isLoading ? (
-        <div className="flex h-[60px] items-center gap-2 border-t border-border px-5 sm:px-6" aria-hidden>
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className={cn(publicSkeleton, 'h-8 w-8 rounded-full')} />
-          ))}
-        </div>
-      ) : staff.length > 0 ? (
+      {staff.length > 0 ? (
         <button
           type="button"
           onClick={() => setStaffOpen(true)}
@@ -118,7 +116,7 @@ export function PublicOfficeCard({ office }: Props) {
             <DialogTitle>{office.name}</DialogTitle>
             <DialogDescription>Zespół biura</DialogDescription>
           </DialogHeader>
-          <StaffList staff={staff} />
+          <StaffList staff={staff} mpGender={mpGender} />
         </DialogContent>
       </Dialog>
     </article>

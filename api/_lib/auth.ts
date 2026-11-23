@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { getServiceClient } from './supabase.js';
+import { errorSummary } from './log-safe.js';
 
 // Role z uprawnieniami Posla - Administrator to Posel pod inna nazwa (odpowiednik is_posel() z RLS).
 export const POSEL_ROLES = ['posel', 'administrator'] as const;
@@ -62,7 +63,7 @@ export async function loadAuthProfile(userId: string): Promise<AuthProfile | nul
     .eq('id', userId)
     .maybeSingle();
   if (error) {
-    console.error('[auth] profile read error', error);
+    console.error('[auth] profile read error', errorSummary(error));
     throw new Error('Odczyt profilu uzytkownika nie powiodl sie');
   }
   return data as AuthProfile | null;
@@ -127,7 +128,7 @@ export async function consumeToken(token: string | null): Promise<McpAuthContext
   const { data, error } = await supabase.rpc('mcp_consume_token', { p_token_hash: tokenHash });
 
   if (error) {
-    console.error('[mcp] mcp_consume_token error', error);
+    console.error('[mcp] mcp_consume_token error', errorSummary(error));
     throw new UnauthorizedError('blad weryfikacji tokena');
   }
   const row = Array.isArray(data) ? data[0] : data;

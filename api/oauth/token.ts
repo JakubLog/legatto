@@ -3,7 +3,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import { getServiceClient } from '../_lib/supabase.js';
 import { isMcpRole, type McpRole } from '../_lib/auth.js';
 import { OAUTH_TOKEN_TTL_SECONDS, parseRedirectUri, stringParam } from '../_lib/oauth.js';
-import { rejectIfAiDisabled } from '../_lib/instance.js';
+import { rejectIfMcpDisabled } from '../_lib/instance.js';
+import { errorSummary } from '../_lib/log-safe.js';
 
 // Zakresy tokena wg roli wlasciciela - to samo mapowanie co create_mcp_token.
 // Pracownik ma zapis interpelacji przez narzedzia submit/resubmit.
@@ -57,7 +58,7 @@ function parseBody(req: VercelRequest): Record<string, unknown> {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   return handlerInner(req, res).catch((err) => {
-    console.error('[oauth/token] unhandled crash', err);
+    console.error('[oauth/token] unhandled crash', errorSummary(err));
     try { res.status(500).json({ error: 'server_error' }); } catch { /* already sent */ }
   });
 }
@@ -66,8 +67,8 @@ async function handlerInner(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(204).end();
-  // OAuth sluzy tylko klientom MCP (Claude) - bez AI na instancji nie istnieje.
-  if (rejectIfAiDisabled(res)) return;
+  // OAuth sluzy tylko klientom MCP - bez MCP na instancji nie istnieje.
+  if (rejectIfMcpDisabled(res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'method_not_allowed' });
 
   const body = parseBody(req);
@@ -111,7 +112,7 @@ async function handlerInner(req: VercelRequest, res: VercelResponse) {
     p_client_id: clientId,
     p_client_secret: clientSecret,
   });
-  if (clientErr) console.error('[oauth/token] verify client error', clientErr);
+  if (clientErr) console.error('[oauth/token] verify client error', errorSummary(clientErr));
   const clientOwnerId: string | undefined = clientRows?.[0]?.user_id;
   if (clientErr || !clientOwnerId) {
     return res.status(401).json({ error: 'invalid_client' });
@@ -124,7 +125,7 @@ async function handlerInner(req: VercelRequest, res: VercelResponse) {
     p_client_id: clientId,
   });
   if (codeErr) {
-    console.error('[oauth/token] consume code error', codeErr);
+    console.error('[oauth/token] consume code error', errorSummary(codeErr));
     return res.status(500).json({ error: 'server_error' });
   }
   const codeRow = Array.isArray(codeRows) ? codeRows[0] : null;
@@ -155,7 +156,7 @@ async function handlerInner(req: VercelRequest, res: VercelResponse) {
     .eq('id', codeRow.user_id)
     .maybeSingle();
   if (ownerErr) {
-    console.error('[oauth/token] owner profile error', ownerErr);
+    console.error('[oauth/token] owner profile error', errorSummary(ownerErr));
     return res.status(500).json({ error: 'server_error' });
   }
   if (!owner?.is_active || !isMcpRole(owner.role)) {
@@ -182,7 +183,7 @@ async function handlerInner(req: VercelRequest, res: VercelResponse) {
   }).select('id').single();
 
   if (insertErr || !tokenRow) {
-    console.error('[oauth/token] insert mcp_token error', insertErr);
+    console.error('[oauth/token] insert mcp_token error', errorSummary(insertErr));
     return res.status(500).json({ error: 'server_error' });
   }
 
@@ -195,7 +196,7 @@ async function handlerInner(req: VercelRequest, res: VercelResponse) {
     p_metadata: { client_id: clientId, prefix: tokenPrefix, scope: codeRow.scope, expires_at: expiresAt },
   });
   if (auditErr) {
-    console.error('[oauth/token] audit error', auditErr);
+    console.error('[oauth/token] audit error', errorSummary(auditErr));
     // Token bez wpisu w audycie nie moze trafic do klienta (fail-closed).
     await supabase.from('mcp_tokens').delete().eq('id', tokenRow.id);
     return res.status(500).json({ error: 'server_error' });

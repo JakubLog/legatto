@@ -1,6 +1,7 @@
 // Wspolne helpery autoryzacji i audytu dla Edge Functions.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { errorSummary } from './log-safe.ts';
 
 /** Format UUID (id profili/kontaktow w body) - walidacja przed uzyciem w zapytaniach i audycie. */
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -13,7 +14,7 @@ export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 export async function isCallerAal2(callerClient: SupabaseClient): Promise<boolean> {
   const { data, error } = await callerClient.rpc('is_aal2');
   if (error) {
-    console.error('is_aal2 rpc error', error);
+    console.error('is_aal2 rpc error', errorSummary(error));
     return false;
   }
   return data === true;
@@ -36,7 +37,7 @@ export async function isCallerPoselRole(adminClient: SupabaseClient, callerId: s
     .eq('id', callerId)
     .maybeSingle();
   if (error) {
-    console.error('caller role lookup error', error);
+    console.error('caller role lookup error', errorSummary(error));
     return false;
   }
   return data?.role === 'posel' && data.is_active === true;
@@ -63,7 +64,7 @@ export async function serviceAudit(
     p_metadata: metadata,
   });
   if (error) {
-    console.error('service_log_audit error', action, error);
+    console.error('service_log_audit error', action, errorSummary(error));
     return false;
   }
   return true;

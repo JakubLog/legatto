@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, type FieldErrors } from 'react-hook-form';
 import { zodFormResolver } from '@/lib/zodForm';
-import { ArrowLeft, ArrowRight, Check, Loader2, Mail, Send } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Copy, Globe, Loader2, Lock, Mail, Send, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -37,7 +37,14 @@ import { useNewsletterDefaults } from '@/hooks/useNewsletterDefaults';
 import { useSiteContent } from '@/hooks/useSiteContent';
 import { DEFAULT_SITE_IDENTITY } from '@/lib/siteContent';
 import { useNewsletterConsentCount } from '@/hooks/useContacts';
-import { newsletterWebUrl, useSaveNewsletterIssue } from '@/hooks/useNewsletterIssues';
+import {
+  NewsletterIssueFrozenError,
+  NewsletterPublicationCancelledError,
+  newsletterWebUrl,
+  useNewsletterWebPublication,
+  useSaveNewsletterIssue,
+} from '@/hooks/useNewsletterIssues';
+import { usePublicSiteUrl } from '@/hooks/useSitePublish';
 import { renderNewsletter, renderNewsletterPlain, type PreviewBlockKey } from '@/lib/newsletter/render';
 import {
   DEFAULT_SECTIONS,
@@ -80,6 +87,9 @@ export function NewsletterEditorDialog({ open, onClose, duplicateFrom }: Props) 
   const sendMut = useSendNewsletter();
   const sendTestMut = useSendTestNewsletter();
   const saveIssueMut = useSaveNewsletterIssue();
+  const publicSiteUrlQ = usePublicSiteUrl();
+  const publicSiteUrl = publicSiteUrlQ.data ?? '';
+  const publication = useNewsletterWebPublication();
 
   const [step, setStep] = useState<Step>('edit');
   const [active, setActive] = useState<PreviewBlockKey | null>(null);
@@ -91,13 +101,16 @@ export function NewsletterEditorDialog({ open, onClose, duplicateFrom }: Props) 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [restoredAt, setRestoredAt] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  /** Wydanie z issueIdRef zgłoszone do publikacji na stronie posła - jego treści nie da się już zmienić. */
+  const [frozen, setFrozen] = useState(false);
   const initializedRef = useRef(false);
   const skipDraftFlushRef = useRef(false);
   /** Wydanie z wersją online tego newslettera (powstaje przy pierwszej wysyłce testowej / docelowej). */
   const issueIdRef = useRef<string | null>(null);
   const editorScrollRef = useRef<HTMLDivElement>(null);
 
-  const defaultsReady = !defaultsQ.isLoading && !settingsQ.isLoading && !siteQ.isLoading;
+  const defaultsReady =
+    !defaultsQ.isLoading && !settingsQ.isLoading && !siteQ.isLoading && !publicSiteUrlQ.isLoading;
 
   const defaultValues = useMemo<NewsletterTemplate>(() => {
     const nd = defaultsQ.data;
@@ -158,6 +171,7 @@ export function NewsletterEditorDialog({ open, onClose, duplicateFrom }: Props) 
       const values = { ...copy, campaign_name: '', header: { ...copy.header, date_label: fresh.header.date_label } };
       form.reset(values);
       issueIdRef.current = null;
+      setFrozen(false);
       setRestoredAt(null);
       setSavedAt(userId ? saveDraft(userId, values, null) : null);
       setActive(values.sections[0] ?? null);
@@ -165,6 +179,7 @@ export function NewsletterEditorDialog({ open, onClose, duplicateFrom }: Props) 
       const draft = userId ? loadDraft(userId, fresh) : null;
       form.reset(draft?.values ?? fresh);
       issueIdRef.current = draft?.issueId ?? null;
+      setFrozen(false);
       setRestoredAt(draft?.savedAt ?? null);
       setSavedAt(draft?.savedAt ?? null);
       setActive(draft ? null : (fresh.sections[0] ?? null));
@@ -218,6 +233,7 @@ export function NewsletterEditorDialog({ open, onClose, duplicateFrom }: Props) 
   const discardDraft = () => {
     if (userId) clearDraft(userId);
     issueIdRef.current = null;
+    setFrozen(false);
     const fresh = freshValues();
     form.reset(fresh);
     setRestoredAt(null);
@@ -280,7 +296,8 @@ export function NewsletterEditorDialog({ open, onClose, duplicateFrom }: Props) 
   /**
    * Zapisuje wydanie (wersja online pod /n/<slug>) i zwraca treść maila z linkiem do niej.
    * Kolejne testy nadpisują ten sam szkic wydania (ten sam slug). /n/<slug> serwuje tylko wydania
-   * wysłane, więc link z maila testowego zacznie działać dopiero po wysyłce kampanii.
+   * wysłane (portal) albo opublikowane na stronie posła, więc link z maila testowego zacznie działać
+   * dopiero po publikacji / wysyłce kampanii.
    */
   const prepareMail = async (values: NewsletterTemplate) => {
     let issue;
@@ -289,16 +306,40 @@ export function NewsletterEditorDialog({ open, onClose, duplicateFrom }: Props) 
         id: issueIdRef.current,
         subject: values.subject,
         template: values,
-        html_web: renderNewsletter(values, { mode: 'web', identity }),
+        html_web: renderNewsletter(values, { mode: 'web', identity, publicSiteUrl }),
       });
     } catch (err) {
+      if (err instanceof NewsletterIssueFrozenError) {
+        setFrozen(true);
+        throw err;
+      }
       throw new Error(`Nie udało się zapisać wersji online: ${err instanceof Error ? err.message : 'nieznany błąd'}`);
     }
     issueIdRef.current = issue.id;
     if (userId) setSavedAt(saveDraft(userId, values, issue.id));
-    const webUrl = newsletterWebUrl(issue.slug);
-    return { issueId: issue.id, html: renderNewsletter(values, { webUrl, identity }), plain: renderNewsletterPlain(values, webUrl) };
+    const webUrl = newsletterWebUrl(issue.slug, publicSiteUrl);
+    return {
+      issueId: issue.id,
+      html: renderNewsletter(values, { webUrl, identity, publicSiteUrl }),
+      plain: renderNewsletterPlain(values, webUrl),
+    };
   };
+
+  /** Zmieniona treść zamrożonego wydania: kolejny zapis utworzy nowe wydanie (nowy link online). */
+  const duplicateAsNew = () => {
+    issueIdRef.current = null;
+    setFrozen(false);
+    if (userId) setSavedAt(saveDraft(userId, form.getValues(), null));
+    toast.success('Treść zapisze się jako nowe wydanie', {
+      description: 'Przy najbliższej wysyłce testowej lub docelowej powstanie nowe wydanie z nowym linkiem online.',
+    });
+  };
+
+  const showFrozenToast = () =>
+    toast.error('Wydanie jest już zgłoszone do publikacji', {
+      description: 'Treść opublikowanego wydania nie może się zmienić. Zduplikuj je jako nowe wydanie.',
+      action: { label: 'Duplikuj jako nowy', onClick: duplicateAsNew },
+    });
 
   const handleSend = async () => {
     const targets = requireTargets();
@@ -306,6 +347,8 @@ export function NewsletterEditorDialog({ open, onClose, duplicateFrom }: Props) 
     const values = form.getValues();
     try {
       const mail = await prepareMail(values);
+      // Strona posła: wersja online musi być opublikowana przed wysyłką (getresponse-proxy to sprawdza).
+      if (publicSiteUrl) await publication.publish(mail.issueId);
       // Proxy po sukcesie w GetResponse sam oznacza wydanie jako wysłane (status/sent_at zmienia tylko serwer).
       const result = await sendMut.mutateAsync({
         name: campaignNameFor(values),
@@ -330,6 +373,17 @@ export function NewsletterEditorDialog({ open, onClose, duplicateFrom }: Props) 
       setConfirmOpen(false);
       onClose();
     } catch (err) {
+      if (err instanceof NewsletterPublicationCancelledError) {
+        toast.info('Wysyłka wstrzymana', {
+          description: 'Publikacja wersji online trwa dalej na serwerze biura. Wyślij kampanię ponownie za chwilę.',
+        });
+        return;
+      }
+      if (err instanceof NewsletterIssueFrozenError) {
+        setConfirmOpen(false);
+        showFrozenToast();
+        return;
+      }
       toast.error('Wysyłka nie powiodła się', {
         description: err instanceof Error ? err.message : 'Nieznany błąd',
       });
@@ -359,6 +413,10 @@ export function NewsletterEditorDialog({ open, onClose, duplicateFrom }: Props) 
       setTestSentTo(email);
       toast.success('Mail testowy wysłany', { description: `Sprawdź skrzynkę: ${email}` });
     } catch (err) {
+      if (err instanceof NewsletterIssueFrozenError) {
+        showFrozenToast();
+        return;
+      }
       toast.error('Wysyłka testowa nie powiodła się', {
         description: err instanceof Error ? err.message : 'Nieznany błąd',
       });
@@ -370,8 +428,9 @@ export function NewsletterEditorDialog({ open, onClose, duplicateFrom }: Props) 
   const senderName =
     fromFieldsQ.data?.find((f) => f.fromFieldId === fromFieldId)?.name || form.getValues('footer.office_name') || '';
   const consentCount = consentCountQ.data ?? null;
-  // Zapis wersji online poprzedza każdą wysyłkę - blokujemy przyciski także na ten czas.
-  const sending = sendMut.isPending || (saveIssueMut.isPending && confirmOpen);
+  // Zapis wersji online (i publikacja na stronie posła) poprzedza wysyłkę - blokujemy przyciski także na ten czas.
+  const publishing = publication.phase !== null;
+  const sending = sendMut.isPending || publishing || (saveIssueMut.isPending && confirmOpen);
   const testing = sendTestMut.isPending || (saveIssueMut.isPending && !confirmOpen);
 
   return (
@@ -480,11 +539,20 @@ export function NewsletterEditorDialog({ open, onClose, duplicateFrom }: Props) 
         </div>
 
         <DialogFooter className="static bottom-auto !mb-0 border-t bg-muted/30 px-5 py-3 pb-3 sm:justify-between max-md:!mb-0">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             {step === 'send' && (
               <Button variant="ghost" onClick={() => setStep('edit')}>
                 <ArrowLeft /> Wróć do treści
               </Button>
+            )}
+            {frozen && (
+              <p className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                <Lock className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                <span className="truncate">Wydanie zgłoszone do publikacji - treść zamrożona.</span>
+                <Button variant="outline" size="sm" onClick={duplicateAsNew}>
+                  <Copy /> Duplikuj jako nowy
+                </Button>
+              </p>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -519,12 +587,35 @@ export function NewsletterEditorDialog({ open, onClose, duplicateFrom }: Props) 
                     .
                   </p>
                   {!testSentTo && <p>Nie wysłano maila testowego w tej sesji.</p>}
+                  {publicSiteUrl && (
+                    <p>
+                      Najpierw wersja online zostanie opublikowana na stronie posła (zwykle 1-3 min), potem kampania
+                      trafi do GetResponse. Po zgłoszeniu publikacji treści wydania nie można już zmienić.
+                    </p>
+                  )}
+                  {publication.phase && (
+                    <p className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-foreground" role="status">
+                      <Globe className="h-4 w-4 shrink-0 text-primary" />
+                      {publication.phase === 'requesting'
+                        ? 'Zgłaszam publikację wersji online…'
+                        : publication.phase === 'queued'
+                          ? 'Wersja online czeka w kolejce publikacji strony…'
+                          : 'Publikuję wersję online na stronie posła…'}
+                      <Loader2 className="ml-auto h-4 w-4 shrink-0 animate-spin" />
+                    </p>
+                  )}
                   <p>Wysyłki nie da się cofnąć.</p>
                 </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={sending}>Anuluj</AlertDialogCancel>
+              {publishing ? (
+                <Button variant="outline" onClick={publication.cancel}>
+                  <X /> Anuluj oczekiwanie
+                </Button>
+              ) : (
+                <AlertDialogCancel disabled={sending}>Anuluj</AlertDialogCancel>
+              )}
               <AlertDialogAction
                 onClick={(e) => {
                   e.preventDefault();
@@ -533,7 +624,7 @@ export function NewsletterEditorDialog({ open, onClose, duplicateFrom }: Props) 
                 disabled={sending}
               >
                 {sending ? <Loader2 className="animate-spin" /> : <Send />}
-                Wyślij teraz
+                {publicSiteUrl ? 'Opublikuj i wyślij' : 'Wyślij teraz'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

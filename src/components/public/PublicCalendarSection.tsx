@@ -1,15 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { eachDayOfInterval, format, isSameMonth, parseISO, startOfDay, startOfMonth } from 'date-fns';
 import { pl } from 'date-fns/locale';
-import { usePublicUpcomingEvents } from '@/hooks/useEvents';
 import { useSejmSittings, type SejmSitting } from '@/hooks/useSejmSittings';
 import { EVENT_TYPE_DOT, EVENT_TYPE_LABELS } from '@/lib/events';
 import { cn } from '@/lib/utils';
-import type { PublicCalendarEvent } from '@/integrations/supabase/types';
+import type { SiteEvent } from '@/lib/siteSnapshot';
 import { SectionHeading } from '@/components/public/SectionHeading';
 import { PublicMonthGrid } from '@/components/public/PublicMonthGrid';
 import { dayKey, formatTimeRange, locationLabel } from '@/components/public/publicFormat';
-import { publicContainer, publicFocus, publicInner, publicSection, publicSkeleton } from '@/components/public/styles';
+import { publicContainer, publicFocus, publicInner, publicSection } from '@/components/public/styles';
 import type { PublicSectionLayout } from '@/lib/publicTheme';
 import { HOMEPAGE_SECTION_ANCHORS } from '@/lib/siteContent';
 
@@ -18,10 +17,10 @@ const UPCOMING_LIMIT = 4;
 const MAX_EVENT_DAYS = 31;
 
 type AgendaItem =
-  | { kind: 'event'; id: string; start: Date; event: PublicCalendarEvent }
+  | { kind: 'event'; id: string; start: Date; event: SiteEvent }
   | { kind: 'sejm'; id: string; start: Date; end: Date; sitting: SejmSitting };
 
-function eventDayKeys(event: PublicCalendarEvent): string[] {
+function eventDayKeys(event: SiteEvent): string[] {
   const start = startOfDay(new Date(event.starts_at));
   const end = event.ends_at ? startOfDay(new Date(event.ends_at)) : start;
   if (end <= start) return [dayKey(start)];
@@ -74,7 +73,7 @@ function AgendaRow({ item }: { item: AgendaItem }) {
   );
 }
 
-interface Props {
+export interface PublicCalendarSectionProps {
   title: string;
   /** Opcjonalny lead pod tytułem. */
   description?: string;
@@ -82,22 +81,37 @@ interface Props {
   layout: PublicSectionLayout;
   /** Tło sekcji (HomePage naprzemiennie krem/biel wg kolejności sekcji). */
   className?: string;
+  /** Publiczne wydarzenia biura z migawki strony (najbliższe, maks. 24). */
+  events: SiteEvent[];
+  /**
+   * Chwila renderowania po stronie serwera (strona statyczna, ISO). Pierwszy render w przeglądarce
+   * używa tej samej daty (zgodna hydratacja), po montażu kalendarz przechodzi na bieżącą datę.
+   */
+  initialNow?: string;
 }
 
 const ANCHOR = HOMEPAGE_SECTION_ANCHORS.calendar;
 
-export function PublicCalendarSection({ title, description, layout, className }: Props) {
-  const eventsQ = usePublicUpcomingEvents();
+export function PublicCalendarSection({ title, description, layout, className, events, initialNow }: PublicCalendarSectionProps) {
   const sejmQ = useSejmSittings();
-  const [month, setMonth] = useState(() => startOfMonth(new Date()));
+  const [now, setNow] = useState(() => (initialNow ? new Date(initialNow) : new Date()));
+  const [month, setMonth] = useState(() => startOfMonth(now));
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+
+  // Strona statyczna: data z builda tylko do hydratacji, potem bieżąca (dziś, miesiąc, najbliższe).
+  useEffect(() => {
+    if (!initialNow) return;
+    const current = new Date();
+    setNow(current);
+    setMonth(startOfMonth(current));
+  }, [initialNow]);
 
   const { items, eventCounts, sejmByDay } = useMemo(() => {
     const items: AgendaItem[] = [];
     const eventCounts = new Map<string, number>();
     const sejmByDay = new Map<string, AgendaItem>();
 
-    for (const event of eventsQ.data ?? []) {
+    for (const event of events) {
       const item: AgendaItem = { kind: 'event', id: event.id, start: new Date(event.starts_at), event };
       items.push(item);
       for (const key of eventDayKeys(event)) eventCounts.set(key, (eventCounts.get(key) ?? 0) + 1);
@@ -111,9 +125,9 @@ export function PublicCalendarSection({ title, description, layout, className }:
     }
     items.sort((a, b) => a.start.getTime() - b.start.getTime());
     return { items, eventCounts, sejmByDay };
-  }, [eventsQ.data, sejmQ.data]);
+  }, [events, sejmQ.data]);
 
-  const todayKey = dayKey(new Date());
+  const todayKey = dayKey(now);
   const visible = selectedKey
     ? items.filter((item) =>
         item.kind === 'sejm' ? sejmByDay.get(selectedKey) === item : eventDayKeys(item.event).includes(selectedKey),
@@ -147,6 +161,7 @@ export function PublicCalendarSection({ title, description, layout, className }:
             <PublicMonthGrid
               className={cn(layout === 'end' && 'lg:order-last')}
               month={month}
+              today={now}
               onMonthChange={setMonth}
               selectedKey={selectedKey}
               onSelect={selectDay}
@@ -173,13 +188,7 @@ export function PublicCalendarSection({ title, description, layout, className }:
                 )}
               </div>
 
-              {eventsQ.isLoading ? (
-                <div className="space-y-3 pt-4" aria-busy="true" aria-label="Ładowanie wydarzeń">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className={cn(publicSkeleton, 'h-16 rounded-[8px]')} />
-                  ))}
-                </div>
-              ) : visible.length === 0 ? (
+              {visible.length === 0 ? (
                 <p className="py-6 text-sm text-muted-foreground">
                   {selectedKey ? 'Brak publicznych wydarzeń w tym dniu.' : 'Brak zaplanowanych publicznych wydarzeń.'}
                 </p>

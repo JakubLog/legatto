@@ -5,6 +5,7 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { z } from 'zod';
 import { getServiceClient } from '../supabase.js';
+import { DbError, errorSummary } from '../log-safe.js';
 import { instanceFlags } from '../instance.js';
 import { getSiteIdentity, mpForms, officeFullName } from '../siteIdentity.js';
 import { ResendError, sendEmail } from './resend.js';
@@ -55,8 +56,9 @@ export interface DispatchContext {
 
 export async function loadDispatchContext(): Promise<DispatchContext> {
   // INSTANCE_EMAIL=off: e-mail niedostępny niezależnie od email_enabled (zapisane, ale pomijane),
-  // bez odczytu klucza Resend. Push działa dalej.
-  const emailOn = instanceFlags().email;
+  // bez odczytu klucza Resend. INSTANCE_PUSH=off (VPS bez zgody admina na egress do usług push):
+  // push niedostępny tak samo. Kanały są od siebie niezależne.
+  const { email: emailOn, push: pushOn } = instanceFlags();
   const [settings, resendKey, identity] = await Promise.all([
     loadSettings(),
     emailOn ? loadResendKey() : Promise.resolve(''),
@@ -67,13 +69,13 @@ export async function loadDispatchContext(): Promise<DispatchContext> {
   const officeName = officeFullName(identity);
   const emailAvailable =
     emailOn && settings.email_enabled && Boolean(resendKey) && Boolean(settings.from_email) && Boolean(appUrl);
-  const vapid = settings.push_enabled ? await ensureVapidKeys() : null;
+  const vapid = pushOn && settings.push_enabled ? await ensureVapidKeys() : null;
   const fromName = (settings.from_name || officeName).replace(/[\r\n<>"]/g, ' ').trim();
   return {
     settings,
     resendKey,
     emailAvailable,
-    pushAvailable: settings.push_enabled && vapid !== null,
+    pushAvailable: pushOn && settings.push_enabled && vapid !== null,
     vapid,
     from: `${fromName} <${settings.from_email}>`,
     vapidSubject: appUrl.startsWith('https://')
@@ -100,7 +102,7 @@ async function loadRecipients(userIds: string[]): Promise<Map<string, Recipient>
     .from('profiles')
     .select('id, email, full_name, is_active')
     .in('id', [...new Set(userIds)]);
-  if (error) throw new Error(`profiles: ${error.message}`);
+  if (error) throw new DbError(error, 'profiles');
   const parsed = z.array(Recipient).parse(data ?? []);
   return new Map(parsed.map((r) => [r.id, r]));
 }
@@ -159,7 +161,7 @@ export async function deliver(row: OutboxRow, recipient: Recipient | undefined, 
       } catch (err) {
         // Każdy błąd wysyłki kończy się tutaj - push_status z tej próby nie może przepaść.
         const resendError = err instanceof ResendError ? err : null;
-        if (!resendError) console.error('[notifications] email error', err instanceof Error ? err.message : err);
+        if (!resendError) console.error('[notifications] email error', errorSummary(err));
         outcome.error = resendError ? `${resendError.code}: ${resendError.message}`.slice(0, 500) : 'Błąd wewnętrzny wysyłki e-mail';
         outcome.rateLimited = resendError?.status === 429;
         outcome.retryAfterSeconds = resendError?.retryAfter ?? undefined;
@@ -241,7 +243,7 @@ export async function dispatchPending(deadline: number): Promise<DispatchSummary
 
   while (Date.now() < deadline - 3000) {
     const claimed = await supabase.rpc('notifications_claim', { p_limit: CLAIM_BATCH });
-    if (claimed.error) throw new Error(`notifications_claim: ${claimed.error.message}`);
+    if (claimed.error) throw new DbError(claimed.error, 'notifications_claim');
     const rows = z.array(OutboxRow).parse(claimed.data ?? []);
     if (rows.length === 0) break;
     let recipients: Map<string, Recipient>;
@@ -266,7 +268,7 @@ export async function dispatchPending(deadline: number): Promise<DispatchSummary
       try {
         outcome = await deliver(row, recipients.get(row.user_id), ctx);
       } catch (err) {
-        console.error('[notifications] deliver error', err instanceof Error ? err.message : err);
+        console.error('[notifications] deliver error', errorSummary(err));
         outcome = { email: row.attempts < MAX_ATTEMPTS ? 'retry' : 'failed', push: null, error: 'Błąd wewnętrzny wysyłki' };
       }
       const result = await finalize(row, outcome);

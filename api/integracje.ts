@@ -18,6 +18,7 @@ import { isAal2Session } from './_lib/jwt.js';
 import { resubmitInterpellation, submitInterpellation } from './_lib/tools/interpellations.js';
 import { ToolValidationError } from './_lib/tools/types.js';
 import { logAudit } from './_lib/audit.js';
+import { errorSummary } from './_lib/log-safe.js';
 
 const SMALL_BODY = 4 * 1024;
 // HTML interpelacji: do 500 000 znaków (MAX_HTML_LENGTH w tools/interpellations.ts) w UTF-8 + reszta pól.
@@ -160,7 +161,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (err.status === 405) res.setHeader('Allow', 'POST');
       return res.status(err.status).json({ error: err.code, message: err.message });
     }
-    console.error('[integracje] error', op, err instanceof Error ? err.message : err);
+    console.error('[integracje] error', op, errorSummary(err));
     return res.status(500).json({ error: 'blad_serwisu', message: 'Błąd serwera integracji' });
   }
 }

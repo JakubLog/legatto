@@ -6,7 +6,6 @@ import {
   endOfWeek,
   format,
   isSameMonth,
-  isToday,
   startOfMonth,
   startOfWeek,
 } from 'date-fns';
@@ -19,6 +18,8 @@ const WEEKDAYS = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb', 'Nd'];
 
 interface Props {
   month: Date;
+  /** Bieżąca data (wyróżniony dzień, przycisk „Dziś”). */
+  today: Date;
   onMonthChange: (month: Date) => void;
   selectedKey: string | null;
   onSelect: (key: string) => void;
@@ -30,13 +31,14 @@ interface Props {
 }
 
 /** Siatka miesiąca: dzisiejszy dzień wyróżniony, dni posiedzeń Sejmu i wydarzenia biura oznaczone. */
-export function PublicMonthGrid({ month, onMonthChange, selectedKey, onSelect, eventCounts, sejmByDay, className }: Props) {
+export function PublicMonthGrid({ month, today: now, onMonthChange, selectedKey, onSelect, eventCounts, sejmByDay, className }: Props) {
   const days = eachDayOfInterval({
     start: startOfWeek(startOfMonth(month), { weekStartsOn: 1 }),
     end: endOfWeek(endOfMonth(month), { weekStartsOn: 1 }),
   });
   const monthLabel = format(month, 'LLLL yyyy', { locale: pl });
-  const isCurrentMonth = isSameMonth(month, new Date());
+  const isCurrentMonth = isSameMonth(month, now);
+  const todayKey = dayKey(now);
 
   const navBtn = cn(
     'inline-flex h-10 w-10 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-cream-2',
@@ -53,7 +55,7 @@ export function PublicMonthGrid({ month, onMonthChange, selectedKey, onSelect, e
           {!isCurrentMonth && (
             <button
               type="button"
-              onClick={() => onMonthChange(startOfMonth(new Date()))}
+              onClick={() => onMonthChange(startOfMonth(now))}
               className={cn(
                 'mr-1 inline-flex min-h-10 items-center rounded-lg px-3 text-sm font-semibold text-brand transition-colors hover:bg-cream-2',
                 publicFocus,
@@ -86,7 +88,7 @@ export function PublicMonthGrid({ month, onMonthChange, selectedKey, onSelect, e
         {days.map((day) => {
           const key = dayKey(day);
           const inMonth = isSameMonth(day, month);
-          const today = isToday(day);
+          const today = key === todayKey;
           const sejm = sejmByDay.has(key);
           const events = eventCounts.get(key) ?? 0;
           const selected = selectedKey === key;
