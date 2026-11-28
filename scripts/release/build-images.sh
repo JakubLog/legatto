@@ -75,9 +75,19 @@ dockerfile_of() {
   esac
 }
 
+# Ten sam BuildKit lokalnie i w CI (scripts/release/buildkit-image): builder nazwany od digestu,
+# więc zmiana przypięcia tworzy nowy builder zamiast użyć starego.
+buildkit_image="$(grep -v '^#' "$root/scripts/release/buildkit-image" | grep -m1 .)"
+[[ "$buildkit_image" =~ @sha256:([0-9a-f]{64})$ ]] || die "scripts/release/buildkit-image: obraz bez @sha256"
+builder="legatto-release-${BASH_REMATCH[1]:0:12}"
+if ! docker buildx inspect "$builder" >/dev/null 2>&1; then
+  docker buildx create --name "$builder" --driver docker-container \
+    --driver-opt "image=$buildkit_image" >/dev/null
+fi
+
 for n in "${IMAGES[@]}"; do
   printf 'build-images: %s (%s)\n' "$n" "$platform" >&2
-  SOURCE_DATE_EPOCH="$epoch" docker buildx build --quiet \
+  SOURCE_DATE_EPOCH="$epoch" docker buildx build --builder "$builder" --quiet \
     --platform "$platform" --provenance=false --sbom=false --pull=false \
     --build-arg SOURCE_DATE_EPOCH="$epoch" \
     --build-arg LEGATTO_VERSION="$version" \
