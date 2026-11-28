@@ -85,9 +85,11 @@ if ! docker buildx inspect "$builder" >/dev/null 2>&1; then
     --driver-opt "image=$buildkit_image" >/dev/null
 fi
 
+# --no-cache: warstwy z cache innego commitu niosą jego SOURCE_DATE_EPOCH (rewrite-timestamp tylko
+# obniża czasy), więc ponowny build lokalny różniłby się od świeżego buildu w CI.
 for n in "${IMAGES[@]}"; do
   printf 'build-images: %s (%s)\n' "$n" "$platform" >&2
-  SOURCE_DATE_EPOCH="$epoch" docker buildx build --builder "$builder" --quiet \
+  SOURCE_DATE_EPOCH="$epoch" docker buildx build --builder "$builder" --quiet --no-cache \
     --platform "$platform" --provenance=false --sbom=false --pull=false \
     --build-arg SOURCE_DATE_EPOCH="$epoch" \
     --build-arg LEGATTO_VERSION="$version" \
